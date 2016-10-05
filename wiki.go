@@ -9,22 +9,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Page is single wikipage
-type Page struct {
-	Title string
-	Body  []byte
-}
-
-func loadPage(title string, w *Wikidata) (*Page, error) {
+func loadObject(title string, w *Wikidata) ([]byte, error) {
 	r, err := w.get(title)
 	if err != nil {
 		return nil, err
 	}
-	body, err := ioutil.ReadAll(r)
-	if err != nil {
-		return nil, err
-	}
-	return &Page{Title: title, Body: body}, nil
+	return ioutil.ReadAll(r)
+}
+
+func loadHTML(title string, w *Wikidata) ([]byte, error) {
+	return loadObject(title+".html", w)
+}
+
+func loadMarkdown(title string, w *Wikidata) ([]byte, error) {
+	return loadObject(title+".md", w)
 }
 
 func main() {
@@ -49,25 +47,24 @@ func main() {
 
 	router.GET("/view/:title", func(c *gin.Context) {
 		title := c.Param("title")
-		p, err := loadPage(title, &w)
+		html, err := loadHTML(title, &w)
 		if err != nil {
 			c.Redirect(http.StatusFound, "/edit/"+title)
 			return
 		}
 
-		html, _ := Markdown(p.Body)
 		c.HTML(http.StatusOK, "view.html", gin.H{
-			"Title": p.Title,
-			"Body":  template.HTML(html),
+			"Title": title,
+			"Body":  template.HTML(string(html)),
 		})
 	})
 
 	router.GET("/edit/:title", func(c *gin.Context) {
 		title := c.Param("title")
 		body := []byte("")
-		p, err := loadPage(title, &w)
+		markdown, err := loadMarkdown(title, &w)
 		if err == nil {
-			body = p.Body
+			body = markdown
 		}
 		c.HTML(http.StatusOK, "edit.html", gin.H{
 			"Title": c.Param("title"),
@@ -77,8 +74,11 @@ func main() {
 
 	router.POST("/save/:title", func(c *gin.Context) {
 		title := c.Param("title")
-		body, _ := c.GetPostForm("body")
-		w.put(title, []byte(body))
+		markdown, _ := c.GetPostForm("body")
+		w.put(title+".md", []byte(markdown))
+
+		html, _ := Markdown([]byte(markdown))
+		w.put(title+".html", []byte(html))
 		c.Redirect(http.StatusFound, "/view/"+title)
 	})
 
