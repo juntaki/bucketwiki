@@ -20,8 +20,10 @@ AWS_ACCESS_KEY_ID=<access key>
 AWS_SECRET_ACCESS_KEY=<secret access keys>
 ~~~
 
-Run
+Build
 
 ~~~
-go run wiki.go
+go build
 ~~~
+
+Run and access http://localhost:8080/list

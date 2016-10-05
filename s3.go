@@ -43,6 +43,24 @@ func (w *Wikidata) get(key string) (io.Reader, error) {
 	return respGet.Body, nil
 }
 
+func (w *Wikidata) list() ([]string, error) {
+	params := &s3.ListObjectsV2Input{
+		Bucket:  aws.String(w.bucket),
+		MaxKeys: aws.Int64(30),
+	}
+	resp, err := w.svc.ListObjectsV2(params)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var result []string
+	for _, c := range resp.Contents {
+		result = append(result, *c.Key)
+	}
+	return result, nil
+}
+
 func (w *Wikidata) connect() error {
 	sess, err := session.NewSession()
 	if err != nil {

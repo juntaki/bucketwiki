@@ -14,10 +14,6 @@ type Page struct {
 	Body  []byte
 }
 
-func (p *Page) save(w *Wikidata) error {
-	return w.put(p.Title, p.Body)
-}
-
 func loadPage(title string, w *Wikidata) (*Page, error) {
 	r, err := w.get(title)
 	if err != nil {
@@ -39,6 +35,16 @@ func main() {
 
 	router := gin.Default()
 	router.LoadHTMLGlob("*.html")
+
+	router.GET("/list", func(c *gin.Context) {
+		list, err := w.list()
+		if err != nil {
+			return
+		}
+		c.HTML(http.StatusOK, "list.html", gin.H{
+			"List": list,
+		})
+	})
 
 	router.GET("/view/:title", func(c *gin.Context) {
 		title := c.Param("title")
