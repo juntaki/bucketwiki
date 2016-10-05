@@ -1,60 +1,12 @@
 package main
 
 import (
-	"bytes"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/gin-gonic/gin"
 )
-
-// Wikidata is storing data in S3
-type Wikidata struct {
-	svc    *s3.S3
-	bucket string
-	region string
-}
-
-func (w *Wikidata) put(key string, payload []byte) error {
-	params := &s3.PutObjectInput{
-		Bucket: aws.String(w.bucket),
-		Key:    aws.String(key),
-		Body:   bytes.NewReader(payload),
-	}
-	_, err := w.svc.PutObject(params)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (w *Wikidata) get(key string) (io.Reader, error) {
-	paramsGet := &s3.GetObjectInput{
-		Bucket: aws.String(w.bucket),
-		Key:    aws.String(key),
-	}
-	respGet, err := w.svc.GetObject(paramsGet)
-	if err != nil {
-		return nil, err
-	}
-
-	return respGet.Body, nil
-}
-
-func (w *Wikidata) connect() error {
-	sess, err := session.NewSession()
-	if err != nil {
-		return err
-	}
-	w.svc = s3.New(sess, &aws.Config{Region: aws.String(w.region)})
-	return nil
-}
 
 // Page is single wikipage
 type Page struct {
@@ -117,8 +69,7 @@ func main() {
 	router.POST("/save/:title", func(c *gin.Context) {
 		title := c.Param("title")
 		body, _ := c.GetPostForm("body")
-		p := &Page{Title: title, Body: []byte(body)}
-		p.save(&w)
+		w.put(title, []byte(body))
 		c.Redirect(http.StatusFound, "/view/"+title)
 	})
 
