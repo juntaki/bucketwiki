@@ -1,6 +1,6 @@
 # S3 wiki
 
-A simple wiki written by golang.
+A simple wiki written in golang.
 Amazon S3 (and its compatibles) back-end.
 
 ## Build and run
