@@ -1,7 +1,9 @@
 # S3 wiki
 
 A simple wiki written in golang.
-Amazon S3 (and its compatibles) back-end.
+
+* Amazon S3 (and its compatibles) back-end
+* GitHub Flavored Markdown
 
 ## Build and run
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"html/template"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -53,9 +54,11 @@ func main() {
 			c.Redirect(http.StatusFound, "/edit/"+title)
 			return
 		}
+
+		html, _ := Markdown(p.Body)
 		c.HTML(http.StatusOK, "view.html", gin.H{
 			"Title": p.Title,
-			"Body":  p.Body,
+			"Body":  template.HTML(html),
 		})
 	})
 
