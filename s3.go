@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"io"
+	"mime"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -17,11 +18,25 @@ type Wikidata struct {
 	region string
 }
 
-func (w *Wikidata) put(key string, payload []byte) error {
-	params := &s3.PutObjectInput{
+func (w *Wikidata) delete(basename, suffix string) error {
+	params := &s3.DeleteObjectInput{
 		Bucket: aws.String(w.bucket),
-		Key:    aws.String(key),
-		Body:   bytes.NewReader(payload),
+		Key:    aws.String(basename + suffix),
+	}
+	_, err := w.svc.DeleteObject(params)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (w *Wikidata) put(basename, suffix string, payload []byte) error {
+	params := &s3.PutObjectInput{
+		Bucket:      aws.String(w.bucket),
+		Key:         aws.String(basename + suffix),
+		Body:        bytes.NewReader(payload),
+		ContentType: aws.String(mime.TypeByExtension(suffix)),
 	}
 	_, err := w.svc.PutObject(params)
 	if err != nil {
