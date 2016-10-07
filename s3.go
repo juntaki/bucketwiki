@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"io"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -43,7 +44,7 @@ func (w *Wikidata) get(key string) (io.Reader, error) {
 	return respGet.Body, nil
 }
 
-func (w *Wikidata) list() ([]string, error) {
+func (w *Wikidata) listBasenameWithSuffix(suffix string) ([]string, error) {
 	params := &s3.ListObjectsV2Input{
 		Bucket:  aws.String(w.bucket),
 		MaxKeys: aws.Int64(30),
@@ -56,7 +57,9 @@ func (w *Wikidata) list() ([]string, error) {
 
 	var result []string
 	for _, c := range resp.Contents {
-		result = append(result, *c.Key)
+		if strings.HasSuffix(*c.Key, suffix) {
+			result = append(result, strings.TrimRight(*c.Key, suffix))
+		}
 	}
 	return result, nil
 }

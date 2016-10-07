@@ -36,7 +36,7 @@ func main() {
 	router.LoadHTMLGlob("*.html")
 
 	router.GET("/list", func(c *gin.Context) {
-		list, err := w.list()
+		list, err := w.listBasenameWithSuffix(".md")
 		if err != nil {
 			return
 		}
