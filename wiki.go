@@ -55,10 +55,7 @@ func s3Middleware(s3 *Wikidata) gin.HandlerFunc {
 }
 
 func listfunc(c *gin.Context) {
-	s3, ok := c.MustGet("S3").(*Wikidata)
-	if !ok {
-		return
-	}
+	s3 := c.MustGet("S3").(*Wikidata)
 	list, err := s3.listBasenameWithSuffix(".md")
 	if err != nil {
 		return
@@ -69,10 +66,7 @@ func listfunc(c *gin.Context) {
 }
 
 func editfunc(c *gin.Context) {
-	s3, ok := c.MustGet("S3").(*Wikidata)
-	if !ok {
-		return
-	}
+	s3 := c.MustGet("S3").(*Wikidata)
 	title := c.Param("title")
 	body := []byte("")
 	markdown, err := loadMarkdown(title, s3)
@@ -97,10 +91,7 @@ func postfunc(c *gin.Context) {
 }
 
 func getfunc(c *gin.Context) {
-	s3, ok := c.MustGet("S3").(*Wikidata)
-	if !ok {
-		return
-	}
+	s3 := c.MustGet("S3").(*Wikidata)
 	title := c.Param("title")
 	html, err := loadHTML(title, s3)
 	if err != nil {
@@ -115,10 +106,7 @@ func getfunc(c *gin.Context) {
 }
 
 func deletefunc(c *gin.Context) {
-	s3, ok := c.MustGet("S3").(*Wikidata)
-	if !ok {
-		return
-	}
+	s3 := c.MustGet("S3").(*Wikidata)
 	title := c.Param("title")
 	s3.delete(title, ".md")
 	s3.delete(title, ".html")
@@ -126,10 +114,7 @@ func deletefunc(c *gin.Context) {
 }
 
 func putfunc(c *gin.Context) {
-	s3, ok := c.MustGet("S3").(*Wikidata)
-	if !ok {
-		return
-	}
+	s3 := c.MustGet("S3").(*Wikidata)
 	title := c.Param("title")
 	markdown, _ := c.GetPostForm("body")
 	s3.put(title, ".md", []byte(markdown))
