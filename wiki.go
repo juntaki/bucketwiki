@@ -135,9 +135,9 @@ func getfunc(c *gin.Context) {
 func deletefunc(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
 	title := c.Param("title")
-	s3.delete(title, ".md")
-	s3.delete(title, ".html")
-	c.Redirect(http.StatusFound, "/files/")
+	s3.deleteMarkdown(title)
+	s3.deleteHTML(title)
+	c.Redirect(http.StatusFound, "/")
 }
 
 func putfunc(c *gin.Context) {

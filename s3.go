@@ -48,12 +48,20 @@ func (w *Wikidata) saveHTML(title string, html string) {
 	w.put("files/"+title, ".html", []byte(html))
 }
 
+func (w *Wikidata) deleteHTML(title string) {
+	w.delete("files/"+title, ".html")
+}
+
 func (w *Wikidata) loadMarkdown(title string) ([]byte, error) {
 	return w.loadObject("files/" + title + ".md")
 }
 
 func (w *Wikidata) saveMarkdown(title string, markdown string) {
 	w.put("files/"+title, ".md", []byte(markdown))
+}
+
+func (w *Wikidata) deleteMarkdown(title string) {
+	w.delete("files/"+title, ".md")
 }
 
 func (w *Wikidata) loadUser(title string) ([]byte, error) {
