@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"io"
+	"io/ioutil"
 	"mime"
 	"strings"
 
@@ -29,6 +30,38 @@ func (w *Wikidata) delete(basename, suffix string) error {
 	}
 
 	return nil
+}
+
+func (w *Wikidata) loadObject(title string) ([]byte, error) {
+	r, err := w.get(title)
+	if err != nil {
+		return nil, err
+	}
+	return ioutil.ReadAll(r)
+}
+
+func (w *Wikidata) loadHTML(title string) ([]byte, error) {
+	return w.loadObject("files/" + title + ".html")
+}
+
+func (w *Wikidata) saveHTML(title string, html string) {
+	w.put("files/"+title, ".html", []byte(html))
+}
+
+func (w *Wikidata) loadMarkdown(title string) ([]byte, error) {
+	return w.loadObject("files/" + title + ".md")
+}
+
+func (w *Wikidata) saveMarkdown(title string, markdown string) {
+	w.put("files/"+title, ".md", []byte(markdown))
+}
+
+func (w *Wikidata) loadUser(title string) ([]byte, error) {
+	return w.loadObject("users/" + title)
+}
+
+func (w *Wikidata) saveUser(title string, user string) {
+	w.put("users/"+title, "", []byte(user))
 }
 
 func (w *Wikidata) put(basename, suffix string, payload []byte) error {
@@ -72,8 +105,11 @@ func (w *Wikidata) listBasenameWithSuffix(suffix string) ([]string, error) {
 
 	var result []string
 	for _, c := range resp.Contents {
-		if strings.HasSuffix(*c.Key, suffix) {
-			result = append(result, strings.TrimRight(*c.Key, suffix))
+		if strings.HasSuffix(*c.Key, suffix) &&
+			strings.HasPrefix(*c.Key, "files/") {
+			item := strings.TrimRight(*c.Key, suffix)
+			item = strings.TrimLeft(item, "files/")
+			result = append(result, item)
 		}
 	}
 	return result, nil

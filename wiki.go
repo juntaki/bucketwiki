@@ -3,28 +3,12 @@ package main
 import (
 	"fmt"
 	"html/template"
-	"io/ioutil"
 	"net/http"
 	"os"
 
+	"github.com/gin-gonic/contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
-
-func loadObject(title string, w *Wikidata) ([]byte, error) {
-	r, err := w.get(title)
-	if err != nil {
-		return nil, err
-	}
-	return ioutil.ReadAll(r)
-}
-
-func loadHTML(title string, w *Wikidata) ([]byte, error) {
-	return loadObject(title+".html", w)
-}
-
-func loadMarkdown(title string, w *Wikidata) ([]byte, error) {
-	return loadObject(title+".md", w)
-}
 
 func main() {
 	w := Wikidata{
@@ -34,15 +18,24 @@ func main() {
 	w.connect()
 
 	router := gin.Default()
+	store := sessions.NewCookieStore([]byte("secret"))
+	router.Use(sessions.Sessions("mysession", store))
 	router.LoadHTMLGlob("*.html")
 
 	router.Use(s3Middleware(&w))
-	router.GET("/list", listfunc)
-	router.GET("/files/:title/edit", editfunc)
-	router.GET("/files/:title", getfunc)
-	router.POST("/files/:title", postfunc)
-	router.PUT("/files/:title", putfunc)
-	router.DELETE("/files/:title", deletefunc)
+	router.GET("/login", getloginfunc)
+	router.POST("/login", postloginfunc)
+
+	auth := router.Group("/")
+	auth.Use(authMiddleware())
+	{
+		auth.GET("/", listfunc)
+		auth.GET("/files/:title/edit", editfunc)
+		auth.GET("/files/:title", getfunc)
+		auth.POST("/files/:title", postfunc)
+		auth.PUT("/files/:title", putfunc)
+		auth.DELETE("/files/:title", deletefunc)
+	}
 
 	router.Run(":8080")
 }
@@ -52,6 +45,40 @@ func s3Middleware(s3 *Wikidata) gin.HandlerFunc {
 		c.Set("S3", s3)
 		c.Next()
 	}
+}
+
+func authMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		session := sessions.Default(c)
+		user := session.Get("user")
+		if user == nil {
+			fmt.Println("get failed")
+			c.Redirect(http.StatusFound, "/login")
+		}
+		c.Next()
+	}
+}
+
+func postloginfunc(c *gin.Context) {
+	s3 := c.MustGet("S3").(*Wikidata)
+	username, ok := c.GetPostForm("username")
+	if !ok {
+		fmt.Println("postform failed")
+		return
+	}
+	_, err := s3.loadUser(username)
+	if err != nil {
+		fmt.Println("loadUser failed")
+		return
+	}
+	session := sessions.Default(c)
+	session.Set("user", username)
+	session.Save()
+	c.Redirect(http.StatusFound, "/")
+}
+
+func getloginfunc(c *gin.Context) {
+	c.HTML(http.StatusOK, "auth.html", gin.H{})
 }
 
 func listfunc(c *gin.Context) {
@@ -69,7 +96,7 @@ func editfunc(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
 	title := c.Param("title")
 	body := []byte("")
-	markdown, err := loadMarkdown(title, s3)
+	markdown, err := s3.loadMarkdown(title)
 	if err == nil {
 		body = markdown
 	}
@@ -93,7 +120,7 @@ func postfunc(c *gin.Context) {
 func getfunc(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
 	title := c.Param("title")
-	html, err := loadHTML(title, s3)
+	html, err := s3.loadHTML(title)
 	if err != nil {
 		c.Redirect(http.StatusFound, "/files/"+title+"/edit")
 		return
@@ -110,16 +137,16 @@ func deletefunc(c *gin.Context) {
 	title := c.Param("title")
 	s3.delete(title, ".md")
 	s3.delete(title, ".html")
-	c.Redirect(http.StatusFound, "/list")
+	c.Redirect(http.StatusFound, "/files/")
 }
 
 func putfunc(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
 	title := c.Param("title")
 	markdown, _ := c.GetPostForm("body")
-	s3.put(title, ".md", []byte(markdown))
+	s3.saveMarkdown(title, markdown)
 
 	html, _ := Markdown([]byte(markdown))
-	s3.put(title, ".html", []byte(html))
+	s3.saveHTML(title, html)
 	c.Redirect(http.StatusFound, "/files/"+title)
 }
