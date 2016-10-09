@@ -1,12 +1,11 @@
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/github-markdown-css/2.4.1/github-markdown.css" type="text/css">
-
-<h1>{{.Title}}</h1>
-
-<p>[<a href="/files/{{.Title}}/edit">Edit</a>] [<a href="/">Go to list</a>]</p>
-
-<form action="/files/{{.Title}}" method="post">
+<p>[<a href="/files/{{.Title}}/edit">Edit</a>] [<a href="" onclick="javascript:document.delete.submit(); return false" >Delete</a>] [<a href="/list">Go to list</a>]</p>
+<form name="delete" action="/files/{{.Title}}" method="post">
     <input type="hidden" name="_method" value="delete">
-    <input type="submit" value="Delete">
 </form>
 
+<!-- Following may be public -->
+
+
+<link rel="stylesheet" href="http://yui.yahooapis.com/pure/0.6.0/pure-min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/github-markdown-css/2.4.1/github-markdown.css" type="text/css">
 <div class="markdown-body">{{.Body}}</div>

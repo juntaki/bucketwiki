@@ -29,7 +29,7 @@ func main() {
 	auth := router.Group("/")
 	auth.Use(authMiddleware())
 	{
-		auth.GET("/", listfunc)
+		auth.GET("/list", listfunc)
 		auth.GET("/files/:title/edit", editfunc)
 		auth.GET("/files/:title", getfunc)
 		auth.POST("/files/:title", postfunc)
@@ -74,7 +74,7 @@ func postloginfunc(c *gin.Context) {
 	session := sessions.Default(c)
 	session.Set("user", username)
 	session.Save()
-	c.Redirect(http.StatusFound, "/")
+	c.Redirect(http.StatusFound, "/list")
 }
 
 func getloginfunc(c *gin.Context) {
@@ -137,7 +137,7 @@ func deletefunc(c *gin.Context) {
 	title := c.Param("title")
 	s3.deleteMarkdown(title)
 	s3.deleteHTML(title)
-	c.Redirect(http.StatusFound, "/")
+	c.Redirect(http.StatusFound, "/list")
 }
 
 func putfunc(c *gin.Context) {
