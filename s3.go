@@ -64,12 +64,12 @@ func (w *Wikidata) deleteMarkdown(title string) {
 	w.delete("files/"+title, ".md")
 }
 
-func (w *Wikidata) loadUser(title string) ([]byte, error) {
-	return w.loadObject("users/" + title)
+func (w *Wikidata) loadUser(username string) ([]byte, error) {
+	return w.loadObject("users/" + username)
 }
 
-func (w *Wikidata) saveUser(title string, user string) {
-	w.put("users/"+title, "", []byte(user))
+func (w *Wikidata) saveUser(username string, userdata string) {
+	w.put("users/"+username, "", []byte(userdata))
 }
 
 func (w *Wikidata) put(basename, suffix string, payload []byte) error {

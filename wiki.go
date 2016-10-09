@@ -26,6 +26,9 @@ func main() {
 	router.GET("/login", getloginfunc)
 	router.POST("/login", postloginfunc)
 
+	router.GET("/auth/callback", authCallback)
+	router.GET("/auth", authenticate)
+
 	auth := router.Group("/")
 	auth.Use(authMiddleware())
 	{
@@ -45,40 +48,6 @@ func s3Middleware(s3 *Wikidata) gin.HandlerFunc {
 		c.Set("S3", s3)
 		c.Next()
 	}
-}
-
-func authMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		session := sessions.Default(c)
-		user := session.Get("user")
-		if user == nil {
-			fmt.Println("get failed")
-			c.Redirect(http.StatusFound, "/login")
-		}
-		c.Next()
-	}
-}
-
-func postloginfunc(c *gin.Context) {
-	s3 := c.MustGet("S3").(*Wikidata)
-	username, ok := c.GetPostForm("username")
-	if !ok {
-		fmt.Println("postform failed")
-		return
-	}
-	_, err := s3.loadUser(username)
-	if err != nil {
-		fmt.Println("loadUser failed")
-		return
-	}
-	session := sessions.Default(c)
-	session.Set("user", username)
-	session.Save()
-	c.Redirect(http.StatusFound, "/list")
-}
-
-func getloginfunc(c *gin.Context) {
-	c.HTML(http.StatusOK, "auth.html", gin.H{})
 }
 
 func listfunc(c *gin.Context) {
