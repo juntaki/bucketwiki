@@ -33,14 +33,14 @@ func main() {
 	auth.Use(authMiddleware())
 	{
 		auth.GET("/", func(c *gin.Context) {
-			c.Redirect(http.StatusFound, "/files/top")
+			c.Redirect(http.StatusFound, "/page/top")
 		})
 		auth.GET("/list", listfunc)
-		auth.GET("/files/:title/edit", editfunc)
-		auth.GET("/files/:title", getfunc)
-		auth.POST("/files/:title", postfunc)
-		auth.PUT("/files/:title", putfunc)
-		auth.DELETE("/files/:title", deletefunc)
+		auth.GET("/page/:title/edit", editfunc)
+		auth.GET("/page/:title", getfunc)
+		auth.POST("/page/:title", postfunc)
+		auth.PUT("/page/:title", putfunc)
+		auth.DELETE("/page/:title", deletefunc)
 	}
 
 	router.Run(":8080")
@@ -94,7 +94,7 @@ func getfunc(c *gin.Context) {
 	title := c.Param("title")
 	html, err := s3.loadHTML(title)
 	if err != nil {
-		c.Redirect(http.StatusFound, "/files/"+title+"/edit")
+		c.Redirect(http.StatusFound, "/page/"+title+"/edit")
 		return
 	}
 
@@ -120,5 +120,5 @@ func putfunc(c *gin.Context) {
 
 	html, _ := Markdown([]byte(markdown))
 	s3.saveHTML(title, html)
-	c.Redirect(http.StatusFound, "/files/"+title)
+	c.Redirect(http.StatusFound, "/page/"+title)
 }

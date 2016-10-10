@@ -1,5 +1,5 @@
-<p>[<a href="/files/{{.Title}}/edit">Edit</a>] [<a href="" onclick="javascript:document.delete.submit(); return false" >Delete</a>] [<a href="/list">Go to list</a>]</p>
-<form name="delete" action="/files/{{.Title}}" method="post">
+<p>[<a href="/page/{{.Title}}/edit">Edit</a>] [<a href="" onclick="javascript:document.delete.submit(); return false" >Delete</a>] [<a href="/list">Go to list</a>]</p>
+<form name="delete" action="/page/{{.Title}}" method="post">
     <input type="hidden" name="_method" value="delete">
 </form>
 

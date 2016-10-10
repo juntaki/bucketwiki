@@ -41,27 +41,27 @@ func (w *Wikidata) loadObject(title string) ([]byte, error) {
 }
 
 func (w *Wikidata) loadHTML(title string) ([]byte, error) {
-	return w.loadObject("files/" + title + ".html")
+	return w.loadObject("page/" + title + ".html")
 }
 
 func (w *Wikidata) saveHTML(title string, html string) {
-	w.put("files/"+title, ".html", []byte(html))
+	w.put("page/"+title, ".html", []byte(html))
 }
 
 func (w *Wikidata) deleteHTML(title string) {
-	w.delete("files/"+title, ".html")
+	w.delete("page/"+title, ".html")
 }
 
 func (w *Wikidata) loadMarkdown(title string) ([]byte, error) {
-	return w.loadObject("files/" + title + ".md")
+	return w.loadObject("page/" + title + ".md")
 }
 
 func (w *Wikidata) saveMarkdown(title string, markdown string) {
-	w.put("files/"+title, ".md", []byte(markdown))
+	w.put("page/"+title, ".md", []byte(markdown))
 }
 
 func (w *Wikidata) deleteMarkdown(title string) {
-	w.delete("files/"+title, ".md")
+	w.delete("page/"+title, ".md")
 }
 
 func (w *Wikidata) loadUser(username string) ([]byte, error) {
@@ -114,9 +114,9 @@ func (w *Wikidata) listBasenameWithSuffix(suffix string) ([]string, error) {
 	var result []string
 	for _, c := range resp.Contents {
 		if strings.HasSuffix(*c.Key, suffix) &&
-			strings.HasPrefix(*c.Key, "files/") {
+			strings.HasPrefix(*c.Key, "page/") {
 			item := strings.TrimRight(*c.Key, suffix)
-			item = strings.TrimLeft(item, "files/")
+			item = strings.TrimLeft(item, "page/")
 			result = append(result, item)
 		}
 	}
