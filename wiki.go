@@ -55,7 +55,7 @@ func s3Middleware(s3 *Wikidata) gin.HandlerFunc {
 
 func listfunc(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
-	list, err := s3.listBasenameWithSuffix(".md")
+	list, err := s3.list()
 	if err != nil {
 		return
 	}
