@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"io"
 	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	uuid "github.com/satori/go.uuid"
 )
 
 // Wikidata is storing data in S3
@@ -16,6 +18,7 @@ type Wikidata struct {
 	svc    *s3.S3
 	bucket string
 	region string
+	uuid   uuid.UUID
 }
 
 func (w *Wikidata) delete(key string) error {
@@ -48,27 +51,33 @@ func (w *Wikidata) loadUUID(title string) (string, error) {
 }
 
 func (w *Wikidata) loadHTML(title string) ([]byte, error) {
-	return w.loadObject("page/" + title + "/index.html")
+	uuidTitle := uuid.NewV5(w.uuid, title).String()
+	return w.loadObject("page/" + uuidTitle + "/index.html")
 }
 
-func (w *Wikidata) saveHTML(title, uuid string, html string) {
-	w.put("page/"+title+"/index.html", "text/html", uuid, []byte(html))
+func (w *Wikidata) saveHTML(title, uuidStatic string, html string) {
+	uuidTitle := uuid.NewV5(w.uuid, title).String()
+	w.put("page/"+uuidTitle+"/index.html", "text/html", uuidStatic, []byte(html))
 }
 
 func (w *Wikidata) deleteHTML(title string) {
-	w.delete("page/" + title + "/index.html")
+	uuidTitle := uuid.NewV5(w.uuid, title).String()
+	w.delete("page/" + uuidTitle + "/index.html")
 }
 
 func (w *Wikidata) loadMarkdown(title string) ([]byte, error) {
-	return w.loadObject("page/" + title + "/index.md")
+	uuidTitle := uuid.NewV5(w.uuid, title).String()
+	return w.loadObject("page/" + uuidTitle + "/index.md")
 }
 
-func (w *Wikidata) saveMarkdown(title, uuid string, markdown string) {
-	w.put("page/"+title+"/index.md", "text/x-markdown", uuid, []byte(markdown))
+func (w *Wikidata) saveMarkdown(title, uuidStatic string, markdown string) {
+	uuidTitle := uuid.NewV5(w.uuid, title).String()
+	w.put("page/"+uuidTitle+"/index.md", "text/x-markdown", uuidStatic, []byte(markdown))
 }
 
 func (w *Wikidata) deleteMarkdown(title string) {
-	w.delete("page/" + title + "/index.md")
+	uuidTitle := uuid.NewV5(w.uuid, title).String()
+	w.delete("page/" + uuidTitle + "/index.md")
 }
 
 func (w *Wikidata) loadUser(username string) ([]byte, error) {
@@ -150,5 +159,6 @@ func (w *Wikidata) connect() error {
 		return err
 	}
 	w.svc = s3.New(sess, &aws.Config{Region: aws.String(w.region)})
+	w.uuid, _ = uuid.FromString(os.Getenv("UUID"))
 	return nil
 }
