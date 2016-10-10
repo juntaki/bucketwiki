@@ -32,6 +32,9 @@ func main() {
 	auth := router.Group("/")
 	auth.Use(authMiddleware())
 	{
+		auth.GET("/", func(c *gin.Context) {
+			c.Redirect(http.StatusFound, "/files/top")
+		})
 		auth.GET("/list", listfunc)
 		auth.GET("/files/:title/edit", editfunc)
 		auth.GET("/files/:title", getfunc)
