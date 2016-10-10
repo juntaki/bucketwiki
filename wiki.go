@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/contrib/sessions"
 	"github.com/gin-gonic/gin"
+	uuid "github.com/satori/go.uuid"
 )
 
 func main() {
@@ -115,10 +116,16 @@ func deletefunc(c *gin.Context) {
 func putfunc(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
 	title := c.Param("title")
+
+	id, err := s3.loadUUID(title)
+	if err != nil {
+		id = uuid.NewV4().String()
+	}
+
 	markdown, _ := c.GetPostForm("body")
-	s3.saveMarkdown(title, markdown)
+	s3.saveMarkdown(title, id, markdown)
 
 	html, _ := Markdown([]byte(markdown))
-	s3.saveHTML(title, html)
+	s3.saveHTML(title, id, html)
 	c.Redirect(http.StatusFound, "/page/"+title)
 }

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"io"
 	"io/ioutil"
-	"mime"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -19,10 +18,10 @@ type Wikidata struct {
 	region string
 }
 
-func (w *Wikidata) delete(basename, suffix string) error {
+func (w *Wikidata) delete(key string) error {
 	params := &s3.DeleteObjectInput{
 		Bucket: aws.String(w.bucket),
-		Key:    aws.String(basename + suffix),
+		Key:    aws.String(key),
 	}
 	_, err := w.svc.DeleteObject(params)
 	if err != nil {
@@ -40,28 +39,36 @@ func (w *Wikidata) loadObject(title string) ([]byte, error) {
 	return ioutil.ReadAll(r)
 }
 
+func (w *Wikidata) loadUUID(title string) (string, error) {
+	r, err := w.head(title)
+	if err != nil {
+		return "", err
+	}
+	return *r["uuid"], nil
+}
+
 func (w *Wikidata) loadHTML(title string) ([]byte, error) {
 	return w.loadObject("page/" + title + "/index.html")
 }
 
-func (w *Wikidata) saveHTML(title string, html string) {
-	w.put("page/"+title+"/index", ".html", []byte(html))
+func (w *Wikidata) saveHTML(title, uuid string, html string) {
+	w.put("page/"+title+"/index.html", "text/html", uuid, []byte(html))
 }
 
 func (w *Wikidata) deleteHTML(title string) {
-	w.delete("page/"+title+"/index", ".html")
+	w.delete("page/" + title + "/index.html")
 }
 
 func (w *Wikidata) loadMarkdown(title string) ([]byte, error) {
 	return w.loadObject("page/" + title + "/index.md")
 }
 
-func (w *Wikidata) saveMarkdown(title string, markdown string) {
-	w.put("page/"+title+"/index", ".md", []byte(markdown))
+func (w *Wikidata) saveMarkdown(title, uuid string, markdown string) {
+	w.put("page/"+title+"/index.md", "text/x-markdown", uuid, []byte(markdown))
 }
 
 func (w *Wikidata) deleteMarkdown(title string) {
-	w.delete("page/"+title+"/index", ".md")
+	w.delete("page/" + title + "/index.md")
 }
 
 func (w *Wikidata) loadUser(username string) ([]byte, error) {
@@ -69,15 +76,18 @@ func (w *Wikidata) loadUser(username string) ([]byte, error) {
 }
 
 func (w *Wikidata) saveUser(username string, userdata string) {
-	w.put("users/"+username, "", []byte(userdata))
+	w.put("users/"+username, "text/plain", "", []byte(userdata))
 }
 
-func (w *Wikidata) put(basename, suffix string, payload []byte) error {
+func (w *Wikidata) put(key, mime, uuid string, payload []byte) error {
 	params := &s3.PutObjectInput{
 		Bucket:      aws.String(w.bucket),
-		Key:         aws.String(basename + suffix),
+		Key:         aws.String(key),
 		Body:        bytes.NewReader(payload),
-		ContentType: aws.String(mime.TypeByExtension(suffix)),
+		ContentType: aws.String(mime),
+		Metadata: map[string]*string{
+			"uuid": aws.String(uuid),
+		},
 	}
 	_, err := w.svc.PutObject(params)
 	if err != nil {
@@ -98,6 +108,19 @@ func (w *Wikidata) get(key string) (io.Reader, error) {
 	}
 
 	return respGet.Body, nil
+}
+
+func (w *Wikidata) head(key string) (map[string]*string, error) {
+	paramsGet := &s3.HeadObjectInput{
+		Bucket: aws.String(w.bucket),
+		Key:    aws.String(key),
+	}
+	resp, err := w.svc.HeadObject(paramsGet)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Metadata, nil
 }
 
 func (w *Wikidata) list() ([]string, error) {
