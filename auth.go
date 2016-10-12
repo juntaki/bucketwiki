@@ -42,7 +42,7 @@ func authCallback(c *gin.Context) {
 	session.Set("user", username)
 	session.Save()
 
-	c.Redirect(http.StatusFound, "/list")
+	c.Redirect(http.StatusFound, "/")
 }
 
 func authenticate(c *gin.Context) {
@@ -64,7 +64,7 @@ func postloginfunc(c *gin.Context) {
 	session := sessions.Default(c)
 	session.Set("user", username)
 	session.Save()
-	c.Redirect(http.StatusFound, "/list")
+	c.Redirect(http.StatusFound, "/")
 }
 
 func getloginfunc(c *gin.Context) {

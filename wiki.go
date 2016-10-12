@@ -36,7 +36,6 @@ func main() {
 		auth.GET("/", func(c *gin.Context) {
 			c.Redirect(http.StatusFound, "/page/top")
 		})
-		auth.GET("/list", listfunc)
 		auth.GET("/page/:title/edit", editfunc)
 		auth.GET("/page/:title", getfunc)
 		auth.POST("/page/:title", postfunc)
@@ -52,17 +51,6 @@ func s3Middleware(s3 *Wikidata) gin.HandlerFunc {
 		c.Set("S3", s3)
 		c.Next()
 	}
-}
-
-func listfunc(c *gin.Context) {
-	s3 := c.MustGet("S3").(*Wikidata)
-	list, err := s3.list()
-	if err != nil {
-		return
-	}
-	c.HTML(http.StatusOK, "list.html", gin.H{
-		"List": list,
-	})
 }
 
 func editfunc(c *gin.Context) {
@@ -110,7 +98,7 @@ func deletefunc(c *gin.Context) {
 	title := c.Param("title")
 	s3.deleteMarkdown(title)
 	s3.deleteHTML(title)
-	c.Redirect(http.StatusFound, "/list")
+	c.Redirect(http.StatusFound, "/")
 }
 
 func putfunc(c *gin.Context) {
