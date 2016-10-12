@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/2.4.1/github-markdown.min.css" type="text/css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.2.4/semantic.min.css"/>
+<link rel="stylesheet" href="/layout.css" type="text/css">
+
+<title>{{.Title}} - S3 Wiki</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.2.4/semantic.min.js"></script>
+</head>
+<body>
+<div class="ui menu">
+    <div class="header item">S3 Wiki</div>
+    <a href="#" class="item"><i class="icon history"></i>History</a>
+    <a href="/page/{{.Title}}" class="item"><i class="icon backward"></i>Cancel</a>
+    <div class="right menu">
+        <a href="#" class="item"><i class="icon settings"></i>Setting</a>
+        <a href="#" class="item"><i class="icon sign out"></i>Logout</a>
+    </div>
+</div>
+<div class="ui container">
+<form action="/page/{{.Title}}" method="post">
+    <textarea name="body" rows="20" cols="80">{{printf "%s" .Body}}</textarea>
+    <input type="hidden" name="_method" value="put">
+    <button class="ui button" type="submit">Save</button>
+</form>
+</div>
+</body>
+</html>

@@ -1,6 +1,0 @@
-<p>[<a href="/page/{{.Title}}">View</a>]
-<form action="/page/{{.Title}}" method="post">
-    <textarea name="body" rows="20" cols="80">{{printf "%s" .Body}}</textarea>
-    <input type="hidden" name="_method" value="put">
-    <input type="submit" value="Save">
-</form>

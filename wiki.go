@@ -21,7 +21,7 @@ func main() {
 	router := gin.Default()
 	store := sessions.NewCookieStore([]byte("secret"))
 	router.Use(sessions.Sessions("mysession", store))
-	router.LoadHTMLGlob("*.html")
+	router.LoadHTMLGlob("style/*.html")
 
 	router.Use(s3Middleware(&w))
 	router.GET("/login", getloginfunc)
@@ -29,6 +29,8 @@ func main() {
 
 	router.GET("/auth/callback", authCallback)
 	router.GET("/auth", authenticate)
+	router.StaticFile("/layout.css", "style/layout.css")
+	router.StaticFile("/favicon.ico", "style/favicon.ico")
 
 	auth := router.Group("/")
 	auth.Use(authMiddleware())
