@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"io/ioutil"
 	"net/http"
+	"net/url"
+	"regexp"
 	"time"
 )
 
-// Markdown convert markdown to html
-func Markdown(text []byte) (string, error) {
+// MarkdownToHTML convert markdown to html
+func MarkdownToHTML(text []byte) (string, error) {
 	req, err := http.NewRequest(
 		"POST",
 		"https://api.github.com/markdown/raw",
@@ -17,7 +19,6 @@ func Markdown(text []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
 	req.Header.Set("Content-Type", "text/plain")
 	req.Header.Add("Accept", "application/vnd.github.v3+json")
 
@@ -27,5 +28,12 @@ func Markdown(text []byte) (string, error) {
 	body, _ := ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
 
-	return string(body), err
+	// Wiki Link: convert "[[Page title]]" to Linked text
+	rep := regexp.MustCompile(`\[\[(.*?)\]\]`)
+	title := "$1"
+	escapedTitle := (&url.URL{Path: title}).String()
+	str := string(body)
+
+	str = rep.ReplaceAllString(str, "<a href=\"/page/"+escapedTitle+"\">"+title+"</a>")
+	return str, err
 }

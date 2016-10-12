@@ -125,7 +125,7 @@ func putfunc(c *gin.Context) {
 	markdown, _ := c.GetPostForm("body")
 	s3.saveMarkdown(title, id, markdown)
 
-	html, _ := Markdown([]byte(markdown))
+	html, _ := MarkdownToHTML([]byte(markdown))
 	s3.saveHTML(title, id, html)
 	c.Redirect(http.StatusFound, "/page/"+title)
 }
