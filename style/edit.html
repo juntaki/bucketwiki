@@ -8,23 +8,43 @@
 <title>{{.Title}} - S3 Wiki</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.2.4/semantic.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/0.3.6/marked.min.js"></script>
+<script type="text/javascript">
+$(function() {
+     marked.setOptions({
+         langPrefix: ''
+     });
+     $('#editor').keyup(function() {
+         var src = $(this).val();
+         var html = marked(src);
+         $('#result').html(html);
+     });
+ });
+</script>
 </head>
 <body>
 <div class="ui menu">
     <div class="header item">S3 Wiki</div>
     <a href="#" class="item"><i class="icon history"></i>History</a>
     <a href="/page/{{.Title}}" class="item"><i class="icon backward"></i>Cancel</a>
+    <a href="#" onclick="javascript:document.edit.submit();return false;" class="item"><i class="icon save"></i>Save</a>
     <div class="right menu">
         <a href="#" class="item"><i class="icon settings"></i>Setting</a>
         <a href="#" class="item"><i class="icon sign out"></i>Logout</a>
     </div>
 </div>
-<div class="ui container">
-<form action="/page/{{.Title}}" method="post">
-    <textarea name="body" rows="20" cols="80">{{printf "%s" .Body}}</textarea>
-    <input type="hidden" name="_method" value="put">
-    <button class="ui button" type="submit">Save</button>
-</form>
+<form name="edit" action="/page/{{.Title}}" method="post">
+<div class="ui padded grid">
+    <div class="equal height row">
+        <div class="eight wide column">
+            <textarea name="body" id="editor"></textarea>
+            <input type="hidden" name="_method" value="put">
+        </div>
+        <div class="eight wide column">
+            <div class="markdown-body" id="result"></div>
+        </div>
+    </div>
 </div>
+</form>
 </body>
 </html>
