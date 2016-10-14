@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -36,7 +37,7 @@ func main() {
 	auth.Use(authMiddleware())
 	{
 		auth.GET("/", func(c *gin.Context) {
-			c.Redirect(http.StatusFound, "/page/top")
+			c.Redirect(http.StatusFound, "/page/Home")
 		})
 		auth.GET("/page/:title/edit", editfunc)
 		auth.GET("/page/:title", getfunc)
@@ -80,6 +81,10 @@ func postfunc(c *gin.Context) {
 	}
 }
 
+type breadcrumb struct {
+	List []string `json:"list"`
+}
+
 func getfunc(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
 	title := c.Param("title")
@@ -89,9 +94,37 @@ func getfunc(c *gin.Context) {
 		return
 	}
 
+	session := sessions.Default(c)
+	jsonStr := session.Get("breadcrumb")
+
+	var u breadcrumb
+	u.List = []string{}
+	if jsonStr != nil {
+		json.Unmarshal(jsonStr.([]byte), &u)
+	}
+
+	var array []string
+
+	for _, l := range u.List {
+		if l != title {
+			array = append(array, l)
+		}
+	}
+
+	maxSize := 5
+
+	u.List = append(array, title)
+	if len(u.List) > maxSize {
+		u.List = u.List[1 : maxSize+1]
+	}
+	jsonOut, _ := json.Marshal(&u)
+	session.Set("breadcrumb", jsonOut)
+	session.Save()
+
 	c.HTML(http.StatusOK, "view.html", gin.H{
-		"Title": title,
-		"Body":  template.HTML(string(html)),
+		"Title":      title,
+		"Body":       template.HTML(string(html)),
+		"Breadcrumb": array,
 	})
 }
 

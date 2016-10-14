@@ -22,6 +22,10 @@
 <div class="ui container">
     <div class="ui breadcrumb">
         <a class="section" href="/">Home</a>
+        {{range $var := .Breadcrumb}}
+        <i class="right chevron icon divider"></i>
+        <div class="section"><a href="/page/{{$var}}">{{$var}}</a></div>
+        {{end}}
         <i class="right chevron icon divider"></i>
         <div class="active section">{{.Title}}</div>
     </div>
