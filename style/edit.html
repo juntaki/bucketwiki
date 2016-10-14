@@ -35,9 +35,16 @@ $(function() {
 </div>
 <form name="edit" action="/page/{{.Title}}" method="post">
 <div class="ui padded grid">
+    <div class="ui breadcrumb">
+        <a class="section" href="/">Home</a>
+        <i class="right chevron icon divider"></i>
+        <div class="section"><a href="/page/{{.Title}}">{{.Title}}</a></div>
+        <i class="right chevron icon divider"></i>
+        <div class="active section">Editing {{.Title}}</div>
+    </div>
     <div class="equal height row">
         <div class="eight wide column">
-            <textarea name="body" id="editor"></textarea>
+            <textarea name="body" id="editor">{{printf "%s" .Body}}</textarea>
             <input type="hidden" name="_method" value="put">
         </div>
         <div class="eight wide column">
