@@ -42,6 +42,7 @@ func main() {
 		auth.GET("/page/:title/edit", editfunc)
 		auth.GET("/page/:title", getfunc)
 		auth.POST("/page/:title", postfunc)
+		auth.POST("/page/:title/acl", aclfunc)
 		auth.PUT("/page/:title", putfunc)
 		auth.DELETE("/page/:title", deletefunc)
 	}
@@ -81,6 +82,19 @@ func postfunc(c *gin.Context) {
 	}
 }
 
+func aclfunc(c *gin.Context) {
+	s3 := c.MustGet("S3").(*Wikidata)
+	title := c.Param("title")
+	acl, _ := c.GetPostForm("acl")
+	switch acl {
+	case "public":
+		s3.aclPublic(title)
+	case "private":
+		s3.aclPrivate(title)
+	}
+	c.Redirect(http.StatusFound, "/page/"+title)
+}
+
 type breadcrumb struct {
 	List []string `json:"list"`
 }
@@ -93,6 +107,9 @@ func getfunc(c *gin.Context) {
 		c.Redirect(http.StatusFound, "/page/"+title+"/edit")
 		return
 	}
+
+	public := s3.checkPublic(title)
+	publicURL := s3.publicURL(title)
 
 	session := sessions.Default(c)
 	jsonStr := session.Get("breadcrumb")
@@ -125,6 +142,8 @@ func getfunc(c *gin.Context) {
 		"Title":      title,
 		"Body":       template.HTML(string(html)),
 		"Breadcrumb": array,
+		"Public":     public,
+		"PublicURL":  publicURL,
 	})
 }
 

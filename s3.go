@@ -21,6 +21,11 @@ type Wikidata struct {
 	uuid   uuid.UUID
 }
 
+func (w *Wikidata) publicURL(title string) string {
+	uuidTitle := uuid.NewV5(w.uuid, title).String()
+	return "https://s3-" + w.region + ".amazonaws.com/" + w.bucket + "/page/" + uuidTitle
+}
+
 func (w *Wikidata) delete(key string) error {
 	params := &s3.DeleteObjectInput{
 		Bucket: aws.String(w.bucket),
@@ -80,6 +85,31 @@ func (w *Wikidata) deleteMarkdown(title string) {
 	w.delete("page/" + uuidTitle + "/index.md")
 }
 
+func (w *Wikidata) checkPublic(title string) bool {
+	uuidTitle := uuid.NewV5(w.uuid, title).String()
+	resp, _ := w.getacl("page/" + uuidTitle + "/index.html")
+	for _, g := range resp.Grants {
+
+		if g.Grantee.URI != nil &&
+			*g.Grantee.URI == "http://acs.amazonaws.com/groups/global/AllUsers" &&
+			g.Permission != nil &&
+			*g.Permission == "READ" {
+			return true
+		}
+	}
+	return false
+}
+
+func (w *Wikidata) aclPublic(title string) error {
+	uuidTitle := uuid.NewV5(w.uuid, title).String()
+	return w.putacl("page/"+uuidTitle+"/index.html", s3.ObjectCannedACLPublicRead)
+}
+
+func (w *Wikidata) aclPrivate(title string) error {
+	uuidTitle := uuid.NewV5(w.uuid, title).String()
+	return w.putacl("page/"+uuidTitle+"/index.html", s3.ObjectCannedACLPrivate)
+}
+
 func (w *Wikidata) loadUser(username string) ([]byte, error) {
 	return w.loadObject("users/" + username)
 }
@@ -130,6 +160,28 @@ func (w *Wikidata) head(key string) (map[string]*string, error) {
 	}
 
 	return resp.Metadata, nil
+}
+
+func (w *Wikidata) putacl(key string, acl string) error {
+	params := &s3.PutObjectAclInput{
+		Bucket: aws.String(w.bucket),
+		Key:    aws.String(key),
+		ACL:    aws.String(acl),
+	}
+	_, err := w.svc.PutObjectAcl(params)
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (w *Wikidata) getacl(key string) (*s3.GetObjectAclOutput, error) {
+	params := &s3.GetObjectAclInput{
+		Bucket: aws.String(w.bucket),
+		Key:    aws.String(key),
+	}
+	return w.svc.GetObjectAcl(params)
 }
 
 func (w *Wikidata) list() ([]string, error) {

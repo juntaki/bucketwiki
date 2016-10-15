@@ -33,7 +33,6 @@ $(function() {
         <a href="#" class="item"><i class="icon sign out"></i>Logout</a>
     </div>
 </div>
-<form name="edit" action="/page/{{.Title}}" method="post">
 <div class="ui padded grid">
     <div class="ui breadcrumb">
         <a class="section" href="/">Home</a>
@@ -42,16 +41,17 @@ $(function() {
         <i class="right chevron icon divider"></i>
         <div class="active section">Editing {{.Title}}</div>
     </div>
-    <div class="equal height row">
+    <div class="row">
         <div class="eight wide column">
-            <textarea name="body" id="editor">{{printf "%s" .Body}}</textarea>
-            <input type="hidden" name="_method" value="put">
+            <form name="edit" action="/page/{{.Title}}" method="post">
+                <textarea name="body" id="editor">{{printf "%s" .Body}}</textarea>
+                <input type="hidden" name="_method" value="put">
+            </form>
         </div>
         <div class="eight wide column">
             <div class="markdown-body" id="result"></div>
         </div>
     </div>
 </div>
-</form>
 </body>
 </html>

@@ -19,20 +19,38 @@
             <a href="#" class="item"><i class="icon sign out"></i>Logout</a>
         </div>
 </div>
-<div class="ui container">
-    <div class="ui breadcrumb">
-        <a class="section" href="/">Home</a>
-        {{range $var := .Breadcrumb}}
-        <i class="right chevron icon divider"></i>
-        <div class="section"><a href="/page/{{$var}}">{{$var}}</a></div>
-        {{end}}
-        <i class="right chevron icon divider"></i>
-        <div class="active section">{{.Title}}</div>
+<div class="ui horizontally padded grid">
+    <div class="left floated eight wide column">
+        <div class="ui breadcrumb">
+            <a class="section" href="/">Home</a>
+            <i class="right chevron icon divider"></i>
+            {{range $var := .Breadcrumb}}
+            <div class="section"><a href="/page/{{$var}}">{{$var}}</a></div>
+            <i class="right arrow icon divider"></i>
+            {{end}}
+            <div class="active section">{{.Title}}</div>
+        </div>
     </div>
-    <div class="ui right floated buttons">
-        <button class="ui icon button"><i class="icon hide"></i></button>
-        <div class="or"></div>
-        <button class="ui positive icon button"><i class="icon unhide"></i></button>
+    <div class="right floated right aligned eight wide column">
+        {{if .Public}}
+        <div class="ui input">
+            <form action="/page/{{.Title}}/acl" method="post">
+                <input type="hidden" name="acl" value="private">
+                <button class="ui basic green button" data-tooltip="Make this page private" data-position="bottom right"><i class="unhide icon"></i>Public</button>
+            </form>
+        </div>
+        <div class="ui action input">
+            <input type="text" value="{{.PublicURL}}">
+            <button class="ui icon button">
+                <i class="copy icon"></i>
+            </button>
+        </div>
+        {{else}}
+        <form action="/page/{{.Title}}/acl" method="post">
+            <input type="hidden" name="acl" value="public">
+            <button class="ui basic gray button" data-tooltip="Make this page Public" data-position="bottom right"><i class="hide icon"></i>Private</button>
+        </form>
+        {{end}}
     </div>
 </div>
 <div class="ui main container">
