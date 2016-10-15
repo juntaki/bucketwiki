@@ -4,7 +4,7 @@ A simple Wiki system written in golang.
 
 * Amazon S3 (and its compatibles) back-end
 * GitHub Flavored Markdown
-* Easy to share a page to the public (TODO)
+* Easy to share a page to the public
 * Not searchable :p
 
 ## Build and run
