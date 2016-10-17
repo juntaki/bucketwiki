@@ -1,10 +1,11 @@
-# S3 wiki
+# Bucket wiki
 
 A simple Wiki system written in golang.
 
-* Amazon S3 (and its compatibles) back-end
+* Amazon S3 back-end
 * GitHub Flavored Markdown
 * Easy to share a page to the public
+
 * Not searchable :p
 
 ## Build and run
