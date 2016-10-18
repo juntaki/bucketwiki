@@ -8,6 +8,23 @@
 <title>Login</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.2.4/semantic.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsSHA/2.2.0/sha256.js"></script>
+<script type="text/javascript">
+ function response()
+ {
+     var shaObj1 = new jsSHA("SHA-256", "TEXT");
+     shaObj1.update(login.password.value);
+     var passHash = shaObj1.getHash("HEX");
+     console.log(passHash);
+
+     var shaObj2 = new jsSHA("SHA-256", "TEXT");
+     shaObj2.update(passHash + "{{.Challenge}}");
+     login.password.value = shaObj2.getHash("HEX");
+
+     login.submit();
+     return true;
+ }
+</script>
 <style type="text/css">
  body {
      background-color: #DADADA;
@@ -24,6 +41,7 @@
 </style>
 </head>
 <body>
+
 <div class="ui middle aligned center aligned grid">
     <div class="column">
         <h2 class="ui teal image header">
@@ -31,7 +49,7 @@
                 Log-in to your account
             </div>
         </h2>
-        <form class="ui large form" action="/login" method="post">
+        <form name="login" class="ui large form" action="/login" method="post">
             <div class="ui stacked segment">
                 <div class="field">
                     <div class="ui left icon input">
@@ -45,11 +63,11 @@
                         <input type="password" name="password" placeholder="Password">
                     </div>
                 </div>
-                <button class="ui fluid large teal submit button">Login</button>
             </div>
 
             <div class="ui error message"></div>
         </form>
+        <button class="ui fluid large teal button" onclick="response()">Login</button>
 
         <button class="ui fluid large submit button twitter">
             <a href="/auth?provider=twitter"><i class="twitter icon"></i>Login with twitter</a>

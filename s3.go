@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -10,7 +12,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
-	uuid "github.com/satori/go.uuid"
 )
 
 // Wikidata is storing data in S3
@@ -18,12 +19,16 @@ type Wikidata struct {
 	svc    *s3.S3
 	bucket string
 	region string
-	uuid   uuid.UUID
+	wikiID string
+}
+
+func (w *Wikidata) titleID(title string) string {
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(title+w.wikiID)))
 }
 
 func (w *Wikidata) publicURL(title string) string {
-	uuidTitle := uuid.NewV5(w.uuid, title).String()
-	return "https://s3-" + w.region + ".amazonaws.com/" + w.bucket + "/page/" + uuidTitle
+	titleID := w.titleID(title)
+	return "http://" + w.region + "s3-website-" + w.bucket + ".amazonaws.com/page/" + titleID
 }
 
 func (w *Wikidata) delete(key string) error {
@@ -47,47 +52,40 @@ func (w *Wikidata) loadObject(title string) ([]byte, error) {
 	return ioutil.ReadAll(r)
 }
 
-func (w *Wikidata) loadUUID(title string) (string, error) {
+func (w *Wikidata) loadDocumentID(title string) (string, error) {
 	r, err := w.head(title)
 	if err != nil {
 		return "", err
 	}
-	return *r["uuid"], nil
+	return *r["documentID"], nil
 }
 
 func (w *Wikidata) loadHTML(title string) ([]byte, error) {
-	uuidTitle := uuid.NewV5(w.uuid, title).String()
-	return w.loadObject("page/" + uuidTitle + "/index.html")
+	return w.loadObject("page/" + w.titleID(title) + "/index.html")
 }
 
-func (w *Wikidata) saveHTML(title, uuidStatic string, html string) {
-	uuidTitle := uuid.NewV5(w.uuid, title).String()
-	w.put("page/"+uuidTitle+"/index.html", "text/html", uuidStatic, []byte(html))
+func (w *Wikidata) saveHTML(title, documentID string, html string) {
+	w.put("page/"+w.titleID(title)+"/index.html", "text/html", documentID, []byte(html))
 }
 
 func (w *Wikidata) deleteHTML(title string) {
-	uuidTitle := uuid.NewV5(w.uuid, title).String()
-	w.delete("page/" + uuidTitle + "/index.html")
+	w.delete("page/" + w.titleID(title) + "/index.html")
 }
 
 func (w *Wikidata) loadMarkdown(title string) ([]byte, error) {
-	uuidTitle := uuid.NewV5(w.uuid, title).String()
-	return w.loadObject("page/" + uuidTitle + "/index.md")
+	return w.loadObject("page/" + w.titleID(title) + "/index.md")
 }
 
-func (w *Wikidata) saveMarkdown(title, uuidStatic string, markdown string) {
-	uuidTitle := uuid.NewV5(w.uuid, title).String()
-	w.put("page/"+uuidTitle+"/index.md", "text/x-markdown", uuidStatic, []byte(markdown))
+func (w *Wikidata) saveMarkdown(title, documentID string, markdown string) {
+	w.put("page/"+w.titleID(title)+"/index.md", "text/x-markdown", documentID, []byte(markdown))
 }
 
 func (w *Wikidata) deleteMarkdown(title string) {
-	uuidTitle := uuid.NewV5(w.uuid, title).String()
-	w.delete("page/" + uuidTitle + "/index.md")
+	w.delete("page/" + w.titleID(title) + "/index.md")
 }
 
 func (w *Wikidata) checkPublic(title string) bool {
-	uuidTitle := uuid.NewV5(w.uuid, title).String()
-	resp, _ := w.getacl("page/" + uuidTitle + "/index.html")
+	resp, _ := w.getacl("page/" + w.titleID(title) + "/index.html")
 	for _, g := range resp.Grants {
 
 		if g.Grantee.URI != nil &&
@@ -101,13 +99,11 @@ func (w *Wikidata) checkPublic(title string) bool {
 }
 
 func (w *Wikidata) aclPublic(title string) error {
-	uuidTitle := uuid.NewV5(w.uuid, title).String()
-	return w.putacl("page/"+uuidTitle+"/index.html", s3.ObjectCannedACLPublicRead)
+	return w.putacl("page/"+w.titleID(title)+"/index.html", s3.ObjectCannedACLPublicRead)
 }
 
 func (w *Wikidata) aclPrivate(title string) error {
-	uuidTitle := uuid.NewV5(w.uuid, title).String()
-	return w.putacl("page/"+uuidTitle+"/index.html", s3.ObjectCannedACLPrivate)
+	return w.putacl("page/"+w.titleID(title)+"/index.html", s3.ObjectCannedACLPrivate)
 }
 
 func (w *Wikidata) loadUser(username string) ([]byte, error) {
@@ -118,14 +114,14 @@ func (w *Wikidata) saveUser(username string, userdata string) {
 	w.put("users/"+username, "text/plain", "", []byte(userdata))
 }
 
-func (w *Wikidata) put(key, mime, uuid string, payload []byte) error {
+func (w *Wikidata) put(key, mime, documentID string, payload []byte) error {
 	params := &s3.PutObjectInput{
 		Bucket:      aws.String(w.bucket),
 		Key:         aws.String(key),
 		Body:        bytes.NewReader(payload),
 		ContentType: aws.String(mime),
 		Metadata: map[string]*string{
-			"uuid": aws.String(uuid),
+			"DocumentID": aws.String(documentID),
 		},
 	}
 	_, err := w.svc.PutObject(params)
@@ -211,6 +207,6 @@ func (w *Wikidata) connect() error {
 		return err
 	}
 	w.svc = s3.New(sess, &aws.Config{Region: aws.String(w.region)})
-	w.uuid, _ = uuid.FromString(os.Getenv("UUID"))
+	w.wikiID = os.Getenv("WIKI_ID")
 	return nil
 }

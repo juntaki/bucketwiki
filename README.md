@@ -26,7 +26,8 @@ AWS_SECRET_ACCESS_KEY=<secret access keys>
 TWITTER_KEY=<twitter key>
 TWITTER_SECRET=<twitter secret>
 URL=<external URL for callback http://localhost:8080>
-UUID=<arbitrary UUID for your app>
+WIKI_ID=<arbitrary string for your wiki>
+SESSION_SECRET=<Session secret>
 ~~~
 
 Build

@@ -9,7 +9,6 @@ import (
 
 	"github.com/gin-gonic/contrib/sessions"
 	"github.com/gin-gonic/gin"
-	uuid "github.com/satori/go.uuid"
 )
 
 func main() {
@@ -159,9 +158,12 @@ func putfunc(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
 	title := c.Param("title")
 
-	id, err := s3.loadUUID(title)
+	id, err := s3.loadDocumentID(title)
 	if err != nil {
-		id = uuid.NewV4().String()
+		id, err = randomString()
+		if err != nil {
+			return
+		}
 	}
 
 	markdown, _ := c.GetPostForm("body")
