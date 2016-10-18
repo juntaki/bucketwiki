@@ -119,3 +119,11 @@ func getloginfunc(c *gin.Context) {
 		"Challenge": challange,
 	})
 }
+
+func getlogoutfunc(c *gin.Context) {
+	session := sessions.Default(c)
+	session.Delete("user")
+	session.Delete("breadcrumb")
+	session.Save()
+	c.Redirect(http.StatusFound, "/login")
+}
