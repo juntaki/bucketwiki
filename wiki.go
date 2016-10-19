@@ -25,8 +25,10 @@ func main() {
 
 	router.Use(s3Middleware(&w))
 	router.GET("/login", getloginfunc)
-	router.GET("/logout", getlogoutfunc)
 	router.POST("/login", postloginfunc)
+	router.GET("/signup", getsignupfunc)
+	router.POST("/signup", postsignupfunc)
+	router.GET("/logout", getlogoutfunc)
 
 	router.GET("/auth/callback", authCallback)
 	router.GET("/auth", authenticate)

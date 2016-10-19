@@ -5,7 +5,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.2.4/semantic.min.css"/>
 <link rel="stylesheet" href="/layout.css" type="text/css">
 
-<title>Login</title>
+<title>Sign up</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.2.4/semantic.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsSHA/2.2.0/sha256.js"></script>
@@ -13,15 +13,10 @@
  function response()
  {
      var shaObj1 = new jsSHA("SHA-256", "TEXT");
-     shaObj1.update(login.password.value);
-     var passHash = shaObj1.getHash("HEX");
-     console.log(passHash);
+     shaObj1.update(signup.password.value);
+     signup.password.value = shaObj1.getHash("HEX");
 
-     var shaObj2 = new jsSHA("SHA-256", "TEXT");
-     shaObj2.update(passHash + "{{.Challenge}}");
-     login.password.value = shaObj2.getHash("HEX");
-
-     login.submit();
+     signup.submit();
      return true;
  }
 </script>
@@ -46,10 +41,10 @@
     <div class="column">
         <h2 class="ui teal image header">
             <div class="content">
-                Log-in to your account
+                Sign up
             </div>
         </h2>
-        <form name="login" class="ui large form" action="/login" method="post">
+        <form name="signup" class="ui large form" action="/signup" method="post">
             <div class="ui stacked segment">
                 <div class="field">
                     <div class="ui left icon input">
@@ -67,14 +62,7 @@
 
             <div class="ui error message"></div>
         </form>
-        <button class="ui fluid large teal button" onclick="response()">Login</button>
-
-        <button class="ui fluid large submit button twitter">
-            <a href="/auth?provider=twitter"><i class="twitter icon"></i>Login with twitter</a>
-        </button>
-        <div class="ui message">
-            New to us? <a href="/signup">Sign Up</a>
-        </div>
+        <button class="ui fluid large teal button" onclick="response()">Signup</button>
     </div>
 </div>
 </body>

@@ -68,11 +68,19 @@ func authenticate(c *gin.Context) {
 }
 
 func postloginfunc(c *gin.Context) {
+	// Forget last cookie first
+	session := sessions.Default(c)
+	session.Delete("user")
+	session.Delete("breadcrumb")
+	session.Save()
+
 	s3 := c.MustGet("S3").(*Wikidata)
+
 	username, ok := c.GetPostForm("username")
 	if !ok {
 		fmt.Println("postform failed")
 		c.Redirect(http.StatusFound, "/login")
+		return
 	}
 	fmt.Println("username: ", username)
 
@@ -80,6 +88,7 @@ func postloginfunc(c *gin.Context) {
 	if err != nil {
 		fmt.Println("loadUser failed")
 		c.Redirect(http.StatusFound, "/login")
+		return
 	}
 	fmt.Println("s3Data:   ", string(userData))
 
@@ -87,11 +96,17 @@ func postloginfunc(c *gin.Context) {
 	if !ok {
 		fmt.Println("postform failed")
 		c.Redirect(http.StatusFound, "/login")
+		return
 	}
 	fmt.Println("response: ", response)
 
-	session := sessions.Default(c)
 	challange := session.Get("challange").(string)
+
+	// Answer is SHA256(SHA256(password string) + challange string)
+	// SHA256(password) should be SHA256(password + salt), but it's too much.
+	// Wiki admin or sniffer cannot see raw password string on network and S3.
+	// Cookie itself may not safe, if network is http. (Is is encrypted?, but sniffer can see cookie.)
+	// Use https proxy, if you want to prevent spoofing.
 	answer := fmt.Sprintf("%x", sha256.Sum256([]byte(string(userData)+challange)))
 
 	fmt.Println("answer:   ", answer)
@@ -125,5 +140,45 @@ func getlogoutfunc(c *gin.Context) {
 	session.Delete("user")
 	session.Delete("breadcrumb")
 	session.Save()
+	c.Redirect(http.StatusFound, "/login")
+}
+
+func getsignupfunc(c *gin.Context) {
+	c.HTML(http.StatusOK, "signup.html", gin.H{})
+}
+
+func postsignupfunc(c *gin.Context) {
+	s3 := c.MustGet("S3").(*Wikidata)
+
+	username, ok := c.GetPostForm("username")
+	if !ok {
+		fmt.Println("postform failed")
+		c.Redirect(http.StatusFound, "/login")
+		return
+	}
+
+	_, err := s3.loadUser(username)
+	if err == nil {
+		fmt.Println("failed to signup: ", username)
+		c.Redirect(http.StatusFound, "/signup")
+		return
+	}
+
+	fmt.Println("signup: ", username)
+
+	userData, ok := c.GetPostForm("password")
+	if !ok {
+		fmt.Println("postform failed")
+		c.Redirect(http.StatusFound, "/login")
+		return
+	}
+
+	err = s3.saveUser(username, userData)
+	if err != nil {
+		fmt.Println("saveUser failed")
+		c.Redirect(http.StatusFound, "/login")
+		return
+	}
+
 	c.Redirect(http.StatusFound, "/login")
 }

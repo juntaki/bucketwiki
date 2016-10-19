@@ -110,8 +110,8 @@ func (w *Wikidata) loadUser(username string) ([]byte, error) {
 	return w.loadObject("users/" + username)
 }
 
-func (w *Wikidata) saveUser(username string, userdata string) {
-	w.put("users/"+username, "text/plain", "", []byte(userdata))
+func (w *Wikidata) saveUser(username string, userdata string) error {
+	return w.put("users/"+username, "text/plain", "", []byte(userdata))
 }
 
 func (w *Wikidata) put(key, mime, documentID string, payload []byte) error {
