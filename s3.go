@@ -3,11 +3,12 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -20,6 +21,22 @@ type Wikidata struct {
 	bucket string
 	region string
 	wikiID string
+}
+
+type pageData struct {
+	title      string
+	author     string
+	body       string
+	lastUpdate time.Time // only for GET
+	id         string    // internal use
+}
+
+type userData struct {
+	Name             string `json:"name"`
+	ID               string `json:"id"`
+	AuthenticateType string `json:"authtype"`
+	Token            string `json:"token"`
+	Secret           string `json:"secret"`
 }
 
 func (w *Wikidata) titleID(title string) string {
@@ -44,40 +61,16 @@ func (w *Wikidata) delete(key string) error {
 	return nil
 }
 
-func (w *Wikidata) loadObject(title string) ([]byte, error) {
-	r, err := w.get(title)
-	if err != nil {
-		return nil, err
-	}
-	return ioutil.ReadAll(r)
-}
-
 func (w *Wikidata) loadDocumentID(title string) (string, error) {
 	r, err := w.head(title)
 	if err != nil {
 		return "", err
 	}
-	return *r["documentID"], nil
-}
-
-func (w *Wikidata) loadHTML(title string) ([]byte, error) {
-	return w.loadObject("page/" + w.titleID(title) + "/index.html")
-}
-
-func (w *Wikidata) saveHTML(title, documentID string, html string) {
-	w.put("page/"+w.titleID(title)+"/index.html", "text/html", documentID, []byte(html))
+	return *r["ID"], nil
 }
 
 func (w *Wikidata) deleteHTML(title string) {
 	w.delete("page/" + w.titleID(title) + "/index.html")
-}
-
-func (w *Wikidata) loadMarkdown(title string) ([]byte, error) {
-	return w.loadObject("page/" + w.titleID(title) + "/index.md")
-}
-
-func (w *Wikidata) saveMarkdown(title, documentID string, markdown string) {
-	w.put("page/"+w.titleID(title)+"/index.md", "text/x-markdown", documentID, []byte(markdown))
 }
 
 func (w *Wikidata) deleteMarkdown(title string) {
@@ -106,22 +99,17 @@ func (w *Wikidata) aclPrivate(title string) error {
 	return w.putacl("page/"+w.titleID(title)+"/index.html", s3.ObjectCannedACLPrivate)
 }
 
-func (w *Wikidata) loadUser(username string) ([]byte, error) {
-	return w.loadObject("users/" + username)
-}
+// PUT request
 
-func (w *Wikidata) saveUser(username string, userdata string) error {
-	return w.put("users/"+username, "text/plain", "", []byte(userdata))
-}
-
-func (w *Wikidata) put(key, mime, documentID string, payload []byte) error {
+func (w *Wikidata) saveHTML(page pageData) error {
 	params := &s3.PutObjectInput{
 		Bucket:      aws.String(w.bucket),
-		Key:         aws.String(key),
-		Body:        bytes.NewReader(payload),
-		ContentType: aws.String(mime),
+		Key:         aws.String("page/" + w.titleID(page.title) + "/index.html"),
+		Body:        strings.NewReader(page.body),
+		ContentType: aws.String("text/html"),
 		Metadata: map[string]*string{
-			"DocumentID": aws.String(documentID),
+			"Id":     aws.String(page.id),
+			"Author": aws.String(page.author),
 		},
 	}
 	_, err := w.svc.PutObject(params)
@@ -132,17 +120,106 @@ func (w *Wikidata) put(key, mime, documentID string, payload []byte) error {
 	return nil
 }
 
-func (w *Wikidata) get(key string) (io.Reader, error) {
+func (w *Wikidata) saveMarkdown(page pageData) error {
+	params := &s3.PutObjectInput{
+		Bucket:      aws.String(w.bucket),
+		Key:         aws.String("page/" + w.titleID(page.title) + "/index.md"),
+		Body:        strings.NewReader(page.body),
+		ContentType: aws.String("text/x-markdown"),
+		Metadata: map[string]*string{
+			"Id":     aws.String(page.id),
+			"Author": aws.String(page.author),
+		},
+	}
+	_, err := w.svc.PutObject(params)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (w *Wikidata) saveUser(user userData) error {
+	body, err := json.Marshal(user)
+	if err != nil {
+		return err
+	}
+
+	params := &s3.PutObjectInput{
+		Bucket:      aws.String(w.bucket),
+		Key:         aws.String("user/" + user.Name),
+		Body:        bytes.NewReader(body),
+		ContentType: aws.String("text/plain"),
+	}
+	_, err = w.svc.PutObject(params)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// GET
+func (w *Wikidata) loadUser(name string) (*userData, error) {
 	paramsGet := &s3.GetObjectInput{
 		Bucket: aws.String(w.bucket),
-		Key:    aws.String(key),
+		Key:    aws.String("user/" + name),
 	}
 	respGet, err := w.svc.GetObject(paramsGet)
 	if err != nil {
 		return nil, err
 	}
 
-	return respGet.Body, nil
+	body, _ := ioutil.ReadAll(respGet.Body)
+
+	var user userData
+	json.Unmarshal(body, &user)
+
+	return &user, nil
+}
+
+func (w *Wikidata) loadHTML(title string) (*pageData, error) {
+	paramsGet := &s3.GetObjectInput{
+		Bucket: aws.String(w.bucket),
+		Key:    aws.String("page/" + w.titleID(title) + "/index.html"),
+	}
+	respGet, err := w.svc.GetObject(paramsGet)
+	if err != nil {
+		return nil, err
+	}
+
+	body, _ := ioutil.ReadAll(respGet.Body)
+
+	page := pageData{
+		title:      title,
+		id:         *respGet.Metadata["Id"],
+		author:     *respGet.Metadata["Author"],
+		lastUpdate: *respGet.LastModified,
+		body:       string(body),
+	}
+	return &page, nil
+}
+
+func (w *Wikidata) loadMarkdown(title string) (*pageData, error) {
+	paramsGet := &s3.GetObjectInput{
+		Bucket: aws.String(w.bucket),
+		Key:    aws.String("page/" + w.titleID(title) + "/index.md"),
+	}
+	respGet, err := w.svc.GetObject(paramsGet)
+	if err != nil {
+		return nil, err
+	}
+
+	body, _ := ioutil.ReadAll(respGet.Body)
+
+	page := pageData{
+		title:      title,
+		id:         *respGet.Metadata["Id"],
+		author:     *respGet.Metadata["Author"],
+		lastUpdate: *respGet.LastModified,
+		body:       string(body),
+	}
+	return &page, nil
 }
 
 func (w *Wikidata) head(key string) (map[string]*string, error) {

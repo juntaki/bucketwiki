@@ -62,10 +62,10 @@ func s3Middleware(s3 *Wikidata) gin.HandlerFunc {
 func editfunc(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
 	title := c.Param("title")
-	body := []byte("")
+	body := ""
 	markdown, err := s3.loadMarkdown(title)
 	if err == nil {
-		body = markdown
+		body = markdown.body
 	}
 	c.HTML(http.StatusOK, "edit.html", gin.H{
 		"Title": c.Param("title"),
@@ -141,11 +141,13 @@ func getfunc(c *gin.Context) {
 	session.Save()
 
 	c.HTML(http.StatusOK, "view.html", gin.H{
-		"Title":      title,
-		"Body":       template.HTML(string(html)),
-		"Breadcrumb": array,
-		"Public":     public,
-		"PublicURL":  publicURL,
+		"Title":        title,
+		"Body":         template.HTML(html.body),
+		"Breadcrumb":   array,
+		"Public":       public,
+		"PublicURL":    publicURL,
+		"LastModified": html.lastUpdate,
+		"Author":       html.author,
 	})
 }
 
@@ -161,6 +163,9 @@ func putfunc(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
 	title := c.Param("title")
 
+	session := sessions.Default(c)
+	user := session.Get("user")
+
 	id, err := s3.loadDocumentID(title)
 	if err != nil {
 		id, err = randomString()
@@ -169,10 +174,18 @@ func putfunc(c *gin.Context) {
 		}
 	}
 
-	markdown, _ := c.GetPostForm("body")
-	s3.saveMarkdown(title, id, markdown)
+	var markdown, html pageData
 
-	html, _ := MarkdownToHTML([]byte(markdown))
-	s3.saveHTML(title, id, html)
+	markdown.title = title
+	markdown.author = user.(string)
+	markdown.body, _ = c.GetPostForm("body")
+	markdown.id = id
+	s3.saveMarkdown(markdown)
+
+	html.title = title
+	html.author = user.(string)
+	html.body, _ = MarkdownToHTML([]byte(markdown.body))
+	html.id = id
+	s3.saveHTML(html)
 	c.Redirect(http.StatusFound, "/page/"+title)
 }
