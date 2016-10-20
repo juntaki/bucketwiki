@@ -62,7 +62,7 @@ func s3Middleware(s3 *Wikidata) gin.HandlerFunc {
 func editfunc(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
 	title := c.Param("title")
-	body := ""
+	body := "# " + title + "\n"
 	markdown, err := s3.loadMarkdown(title)
 	if err == nil {
 		body = markdown.body
