@@ -45,7 +45,7 @@ func (w *Wikidata) titleID(title string) string {
 
 func (w *Wikidata) publicURL(title string) string {
 	titleID := w.titleID(title)
-	return "http://" + w.region + "s3-website-" + w.bucket + ".amazonaws.com/page/" + titleID
+	return "http://" + w.bucket + ".s3-website-" + w.region + ".amazonaws.com/page/" + titleID
 }
 
 func (w *Wikidata) delete(key string) error {
