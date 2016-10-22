@@ -8,6 +8,20 @@
 <title>{{.Title}} - Bucket Wiki</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.2.4/semantic.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/1.5.13/clipboard.min.js"></script>
+<script>
+ $(function() {
+     var clipboard = new Clipboard('.btn');
+
+     clipboard.on('success', function(e) {
+         e.clearSelection();
+     });
+     $('.btn').popup({
+         on       : 'click',
+         position : ''
+     });
+ });
+</script>
 </head>
 <body>
 <div class="ui menu">
@@ -40,8 +54,8 @@
             </form>
         </div>
         <div class="ui action input">
-            <input type="text" value="{{.PublicURL}}">
-            <button class="ui icon button">
+            <input id="url" type="text" value="{{.PublicURL}}">
+            <button class="btn ui icon button" data-clipboard-target="#url" data-content="Copied" data-position="bottom right">
                 <i class="copy icon"></i>
             </button>
         </div>
