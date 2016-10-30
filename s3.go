@@ -196,11 +196,17 @@ func (w *Wikidata) loadHTML(titleHash string) (*pageData, error) {
 
 	page := pageData{
 		titleHash:  titleHash,
-		title:      *respGet.Metadata["Title"],
-		id:         *respGet.Metadata["Id"],
-		author:     *respGet.Metadata["Author"],
 		lastUpdate: *respGet.LastModified,
 		body:       string(body),
+	}
+	if respGet.Metadata["Title"] != nil {
+		page.title = *respGet.Metadata["Title"]
+	}
+	if respGet.Metadata["Id"] != nil {
+		page.id = *respGet.Metadata["Id"]
+	}
+	if respGet.Metadata["Author"] != nil {
+		page.author = *respGet.Metadata["Author"]
 	}
 	return &page, nil
 }
@@ -220,11 +226,17 @@ func (w *Wikidata) loadMarkdown(titleHash string) (*pageData, error) {
 
 	page := pageData{
 		titleHash:  titleHash,
-		title:      *respGet.Metadata["Title"],
-		id:         *respGet.Metadata["Id"],
-		author:     *respGet.Metadata["Author"],
 		lastUpdate: *respGet.LastModified,
 		body:       string(body),
+	}
+	if respGet.Metadata["Title"] != nil {
+		page.title = *respGet.Metadata["Title"]
+	}
+	if respGet.Metadata["Id"] != nil {
+		page.id = *respGet.Metadata["Id"]
+	}
+	if respGet.Metadata["Author"] != nil {
+		page.author = *respGet.Metadata["Author"]
 	}
 	return &page, nil
 }

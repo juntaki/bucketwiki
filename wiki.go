@@ -117,12 +117,19 @@ func getfunc(c *gin.Context) {
 	var u breadcrumb
 	u.List = []([]string){}
 	if jsonStr != nil {
-		json.Unmarshal(jsonStr.([]byte), &u)
+		err = json.Unmarshal(jsonStr.([]byte), &u)
+		if err != nil {
+			u.List = []([]string){}
+		}
 	}
 
 	var array []([]string)
 
 	for _, l := range u.List {
+		if len(l) != 2 {
+			// cookie is malformed, may be old version.
+			break
+		}
 		if l[0] != title {
 			array = append(array, l)
 		}
