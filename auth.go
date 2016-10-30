@@ -51,6 +51,7 @@ func authCallback(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
 	user, err := gothic.CompleteUserAuth(c.Writer, c.Request)
 	if err != nil {
+		c.Redirect(http.StatusInternalServerError, "/500")
 		return
 	}
 
@@ -83,8 +84,8 @@ func postloginfunc(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
 
 	username, ok := c.GetPostForm("username")
-	if !ok {
-		fmt.Println("postform failed")
+	if !ok || username == "" {
+		fmt.Println("Failed to get username")
 		c.Redirect(http.StatusFound, "/login")
 		return
 	}
@@ -92,7 +93,7 @@ func postloginfunc(c *gin.Context) {
 
 	userData, err := s3.loadUser(username)
 	if err != nil {
-		fmt.Println("loadUser failed")
+		fmt.Println("User is not found")
 		c.Redirect(http.StatusFound, "/login")
 		return
 	}
@@ -100,7 +101,7 @@ func postloginfunc(c *gin.Context) {
 
 	response, ok := c.GetPostForm("password")
 	if !ok {
-		fmt.Println("postform failed")
+		fmt.Println("Failed to get password")
 		c.Redirect(http.StatusFound, "/login")
 		return
 	}
@@ -159,15 +160,15 @@ func postsignupfunc(c *gin.Context) {
 	var user userData
 	var ok bool
 	user.Name, ok = c.GetPostForm("username")
-	if !ok {
-		fmt.Println("postform failed")
-		c.Redirect(http.StatusFound, "/login")
+	if !ok || user.Name == "" {
+		fmt.Println("Failed to get username")
+		c.Redirect(http.StatusFound, "/signup")
 		return
 	}
 
 	_, err := s3.loadUser(user.Name)
 	if err == nil {
-		fmt.Println("failed to signup: ", user.Name)
+		fmt.Println("User already exist: ", user.Name)
 		c.Redirect(http.StatusFound, "/signup")
 		return
 	}
@@ -176,15 +177,15 @@ func postsignupfunc(c *gin.Context) {
 
 	user.Secret, ok = c.GetPostForm("password")
 	if !ok {
-		fmt.Println("postform failed")
-		c.Redirect(http.StatusFound, "/login")
+		fmt.Println("Failed to get password")
+		c.Redirect(http.StatusFound, "/signup")
 		return
 	}
 
 	err = s3.saveUser(user)
 	if err != nil {
 		fmt.Println("saveUser failed")
-		c.Redirect(http.StatusFound, "/login")
+		c.Redirect(http.StatusInternalServerError, "/500")
 		return
 	}
 

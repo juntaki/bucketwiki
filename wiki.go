@@ -32,6 +32,7 @@ func main() {
 
 	router.GET("/auth/callback", authCallback)
 	router.GET("/auth", authenticate)
+	router.StaticFile("/500", "style/500.html")
 	router.StaticFile("/layout.css", "style/layout.css")
 	router.StaticFile("/favicon.ico", "style/favicon.ico")
 
@@ -183,6 +184,7 @@ func putfunc(c *gin.Context) {
 	titleHash := c.Param("titleHash")
 	title, _ := c.GetPostForm("title")
 	if titleHash != s3.titleHash(title) {
+		c.Redirect(http.StatusInternalServerError, "/500")
 		return
 	}
 
@@ -193,6 +195,7 @@ func putfunc(c *gin.Context) {
 	if err != nil {
 		id, err = randomString()
 		if err != nil {
+			c.Redirect(http.StatusInternalServerError, "/500")
 			return
 		}
 	}
