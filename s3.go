@@ -24,6 +24,7 @@ type Wikidata struct {
 }
 
 type pageData struct {
+	titleHash  string
 	title      string
 	author     string
 	body       string
@@ -39,13 +40,12 @@ type userData struct {
 	Secret           string `json:"secret"`
 }
 
-func (w *Wikidata) titleID(title string) string {
-	return fmt.Sprintf("%x", sha256.Sum256([]byte(title+w.wikiID)))
+func (w *Wikidata) titleHash(titleHash string) string {
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(titleHash+w.wikiID)))
 }
 
-func (w *Wikidata) publicURL(title string) string {
-	titleID := w.titleID(title)
-	return "http://" + w.bucket + ".s3-website-" + w.region + ".amazonaws.com/page/" + titleID
+func (w *Wikidata) publicURL(titleHash string) string {
+	return "http://" + w.bucket + ".s3-website-" + w.region + ".amazonaws.com/page/" + titleHash
 }
 
 func (w *Wikidata) delete(key string) error {
@@ -61,24 +61,24 @@ func (w *Wikidata) delete(key string) error {
 	return nil
 }
 
-func (w *Wikidata) loadDocumentID(title string) (string, error) {
-	r, err := w.head(title)
+func (w *Wikidata) loadDocumentID(titleHash string) (string, error) {
+	r, err := w.head(titleHash)
 	if err != nil {
 		return "", err
 	}
 	return *r["ID"], nil
 }
 
-func (w *Wikidata) deleteHTML(title string) {
-	w.delete("page/" + w.titleID(title) + "/index.html")
+func (w *Wikidata) deleteHTML(titleHash string) {
+	w.delete("page/" + titleHash + "/index.html")
 }
 
-func (w *Wikidata) deleteMarkdown(title string) {
-	w.delete("page/" + w.titleID(title) + "/index.md")
+func (w *Wikidata) deleteMarkdown(titleHash string) {
+	w.delete("page/" + titleHash + "/index.md")
 }
 
-func (w *Wikidata) checkPublic(title string) bool {
-	resp, _ := w.getacl("page/" + w.titleID(title) + "/index.html")
+func (w *Wikidata) checkPublic(titleHash string) bool {
+	resp, _ := w.getacl("page/" + titleHash + "/index.html")
 	for _, g := range resp.Grants {
 
 		if g.Grantee.URI != nil &&
@@ -91,12 +91,12 @@ func (w *Wikidata) checkPublic(title string) bool {
 	return false
 }
 
-func (w *Wikidata) aclPublic(title string) error {
-	return w.putacl("page/"+w.titleID(title)+"/index.html", s3.ObjectCannedACLPublicRead)
+func (w *Wikidata) aclPublic(titleHash string) error {
+	return w.putacl("page/"+titleHash+"/index.html", s3.ObjectCannedACLPublicRead)
 }
 
-func (w *Wikidata) aclPrivate(title string) error {
-	return w.putacl("page/"+w.titleID(title)+"/index.html", s3.ObjectCannedACLPrivate)
+func (w *Wikidata) aclPrivate(titleHash string) error {
+	return w.putacl("page/"+titleHash+"/index.html", s3.ObjectCannedACLPrivate)
 }
 
 // PUT request
@@ -104,12 +104,13 @@ func (w *Wikidata) aclPrivate(title string) error {
 func (w *Wikidata) saveHTML(page pageData) error {
 	params := &s3.PutObjectInput{
 		Bucket:      aws.String(w.bucket),
-		Key:         aws.String("page/" + w.titleID(page.title) + "/index.html"),
+		Key:         aws.String("page/" + page.titleHash + "/index.html"),
 		Body:        strings.NewReader(page.body),
 		ContentType: aws.String("text/html"),
 		Metadata: map[string]*string{
 			"Id":     aws.String(page.id),
 			"Author": aws.String(page.author),
+			"Title":  aws.String(page.title),
 		},
 	}
 	_, err := w.svc.PutObject(params)
@@ -123,12 +124,13 @@ func (w *Wikidata) saveHTML(page pageData) error {
 func (w *Wikidata) saveMarkdown(page pageData) error {
 	params := &s3.PutObjectInput{
 		Bucket:      aws.String(w.bucket),
-		Key:         aws.String("page/" + w.titleID(page.title) + "/index.md"),
+		Key:         aws.String("page/" + page.titleHash + "/index.md"),
 		Body:        strings.NewReader(page.body),
 		ContentType: aws.String("text/x-markdown"),
 		Metadata: map[string]*string{
 			"Id":     aws.String(page.id),
 			"Author": aws.String(page.author),
+			"Title":  aws.String(page.title),
 		},
 	}
 	_, err := w.svc.PutObject(params)
@@ -161,6 +163,7 @@ func (w *Wikidata) saveUser(user userData) error {
 
 // GET
 func (w *Wikidata) loadUser(name string) (*userData, error) {
+	fmt.Println("key:", "user/"+name)
 	paramsGet := &s3.GetObjectInput{
 		Bucket: aws.String(w.bucket),
 		Key:    aws.String("user/" + name),
@@ -178,10 +181,11 @@ func (w *Wikidata) loadUser(name string) (*userData, error) {
 	return &user, nil
 }
 
-func (w *Wikidata) loadHTML(title string) (*pageData, error) {
+func (w *Wikidata) loadHTML(titleHash string) (*pageData, error) {
+	fmt.Println("key:", "page/"+titleHash+"/index.html")
 	paramsGet := &s3.GetObjectInput{
 		Bucket: aws.String(w.bucket),
-		Key:    aws.String("page/" + w.titleID(title) + "/index.html"),
+		Key:    aws.String("page/" + titleHash + "/index.html"),
 	}
 	respGet, err := w.svc.GetObject(paramsGet)
 	if err != nil {
@@ -191,7 +195,8 @@ func (w *Wikidata) loadHTML(title string) (*pageData, error) {
 	body, _ := ioutil.ReadAll(respGet.Body)
 
 	page := pageData{
-		title:      title,
+		titleHash:  titleHash,
+		title:      *respGet.Metadata["Title"],
 		id:         *respGet.Metadata["Id"],
 		author:     *respGet.Metadata["Author"],
 		lastUpdate: *respGet.LastModified,
@@ -200,10 +205,11 @@ func (w *Wikidata) loadHTML(title string) (*pageData, error) {
 	return &page, nil
 }
 
-func (w *Wikidata) loadMarkdown(title string) (*pageData, error) {
+func (w *Wikidata) loadMarkdown(titleHash string) (*pageData, error) {
+	fmt.Println("key:", "page/"+titleHash+"/index.md")
 	paramsGet := &s3.GetObjectInput{
 		Bucket: aws.String(w.bucket),
-		Key:    aws.String("page/" + w.titleID(title) + "/index.md"),
+		Key:    aws.String("page/" + titleHash + "/index.md"),
 	}
 	respGet, err := w.svc.GetObject(paramsGet)
 	if err != nil {
@@ -213,7 +219,8 @@ func (w *Wikidata) loadMarkdown(title string) (*pageData, error) {
 	body, _ := ioutil.ReadAll(respGet.Body)
 
 	page := pageData{
-		title:      title,
+		titleHash:  titleHash,
+		title:      *respGet.Metadata["Title"],
 		id:         *respGet.Metadata["Id"],
 		author:     *respGet.Metadata["Author"],
 		lastUpdate: *respGet.LastModified,

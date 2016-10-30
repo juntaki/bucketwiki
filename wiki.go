@@ -12,18 +12,18 @@ import (
 )
 
 func main() {
-	w := Wikidata{
+	s3 := Wikidata{
 		bucket: os.Getenv("AWS_BUCKET_NAME"),
 		region: os.Getenv("AWS_BUCKET_REGION"),
 	}
-	w.connect()
+	s3.connect()
 
 	router := gin.Default()
 	store := sessions.NewCookieStore([]byte("secret"))
 	router.Use(sessions.Sessions("mysession", store))
 	router.LoadHTMLGlob("style/*.html")
 
-	router.Use(s3Middleware(&w))
+	router.Use(s3Middleware(&s3))
 	router.GET("/login", getloginfunc)
 	router.POST("/login", postloginfunc)
 	router.GET("/signup", getsignupfunc)
@@ -39,17 +39,21 @@ func main() {
 	auth.Use(authMiddleware())
 	{
 		auth.GET("/", func(c *gin.Context) {
-			c.Redirect(http.StatusFound, "/page/Home")
+			// For first access, title query should be passed.
+			c.Redirect(http.StatusFound, "/page/"+s3.titleHash("Home")+"?title=Home")
 		})
-		auth.GET("/page/:title/edit", editfunc)
-		auth.GET("/page/:title", getfunc)
-		auth.POST("/page/:title", postfunc)
-		auth.POST("/page/:title/acl", aclfunc)
-		auth.PUT("/page/:title", putfunc)
-		auth.DELETE("/page/:title", deletefunc)
+		auth.GET("/page/:titleHash/edit", editfunc)
+		auth.GET("/page/:titleHash", getfunc)
+		auth.POST("/page/:titleHash", postfunc)
+		auth.POST("/page/:titleHash/acl", aclfunc)
+		auth.PUT("/page/:titleHash", putfunc)
+		auth.DELETE("/page/:titleHash", deletefunc)
 	}
-
-	router.Run(":8080")
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	router.Run(":" + port)
 }
 
 func s3Middleware(s3 *Wikidata) gin.HandlerFunc {
@@ -61,15 +65,90 @@ func s3Middleware(s3 *Wikidata) gin.HandlerFunc {
 
 func editfunc(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
-	title := c.Param("title")
+	titleHash := c.Param("titleHash")
+	title := c.Query("title")
 	body := "# " + title + "\n"
-	markdown, err := s3.loadMarkdown(title)
+	markdown, err := s3.loadMarkdown(titleHash)
 	if err == nil {
 		body = markdown.body
 	}
 	c.HTML(http.StatusOK, "edit.html", gin.H{
-		"Title": c.Param("title"),
-		"Body":  body,
+		"Title":     title,
+		"TitleHash": titleHash,
+		"Body":      body,
+	})
+}
+
+func aclfunc(c *gin.Context) {
+	s3 := c.MustGet("S3").(*Wikidata)
+	titleHash := c.Param("titleHash")
+	acl, _ := c.GetPostForm("acl")
+	switch acl {
+	case "public":
+		s3.aclPublic(titleHash)
+	case "private":
+		s3.aclPrivate(titleHash)
+	}
+	c.Redirect(http.StatusFound, "/page/"+titleHash)
+}
+
+type breadcrumb struct {
+	List []([]string) `json:"list"`
+}
+
+func getfunc(c *gin.Context) {
+	s3 := c.MustGet("S3").(*Wikidata)
+	titleHash := c.Param("titleHash")
+	html, err := s3.loadHTML(titleHash)
+	if err != nil {
+		// If no object found, title cannot get from metadata, so it must be passed via query.
+		title := c.Query("title")
+		c.Redirect(http.StatusFound, "/page/"+titleHash+"/edit?title="+title)
+		return
+	}
+	title := html.title
+
+	public := s3.checkPublic(titleHash)
+	publicURL := s3.publicURL(titleHash)
+
+	session := sessions.Default(c)
+	jsonStr := session.Get("breadcrumb")
+
+	var u breadcrumb
+	u.List = []([]string){}
+	if jsonStr != nil {
+		json.Unmarshal(jsonStr.([]byte), &u)
+	}
+
+	var array []([]string)
+
+	for _, l := range u.List {
+		if l[0] != title {
+			array = append(array, l)
+		}
+	}
+
+	maxSize := 5
+
+	u.List = append(array, []string{title, titleHash})
+
+	// Cut down the size
+	if len(u.List) > maxSize {
+		u.List = u.List[1 : maxSize+1]
+	}
+	jsonOut, _ := json.Marshal(&u)
+	session.Set("breadcrumb", jsonOut)
+	session.Save()
+
+	c.HTML(http.StatusOK, "view.html", gin.H{
+		"Title":        title,
+		"TitleHash":    titleHash,
+		"Body":         template.HTML(html.body),
+		"Breadcrumb":   array,
+		"Public":       public,
+		"PublicURL":    publicURL,
+		"LastModified": html.lastUpdate,
+		"Author":       html.author,
 	})
 }
 
@@ -84,89 +163,26 @@ func postfunc(c *gin.Context) {
 	}
 }
 
-func aclfunc(c *gin.Context) {
-	s3 := c.MustGet("S3").(*Wikidata)
-	title := c.Param("title")
-	acl, _ := c.GetPostForm("acl")
-	switch acl {
-	case "public":
-		s3.aclPublic(title)
-	case "private":
-		s3.aclPrivate(title)
-	}
-	c.Redirect(http.StatusFound, "/page/"+title)
-}
-
-type breadcrumb struct {
-	List []string `json:"list"`
-}
-
-func getfunc(c *gin.Context) {
-	s3 := c.MustGet("S3").(*Wikidata)
-	title := c.Param("title")
-	html, err := s3.loadHTML(title)
-	if err != nil {
-		c.Redirect(http.StatusFound, "/page/"+title+"/edit")
-		return
-	}
-
-	public := s3.checkPublic(title)
-	publicURL := s3.publicURL(title)
-
-	session := sessions.Default(c)
-	jsonStr := session.Get("breadcrumb")
-
-	var u breadcrumb
-	u.List = []string{}
-	if jsonStr != nil {
-		json.Unmarshal(jsonStr.([]byte), &u)
-	}
-
-	var array []string
-
-	for _, l := range u.List {
-		if l != title {
-			array = append(array, l)
-		}
-	}
-
-	maxSize := 5
-
-	u.List = append(array, title)
-	if len(u.List) > maxSize {
-		u.List = u.List[1 : maxSize+1]
-	}
-	jsonOut, _ := json.Marshal(&u)
-	session.Set("breadcrumb", jsonOut)
-	session.Save()
-
-	c.HTML(http.StatusOK, "view.html", gin.H{
-		"Title":        title,
-		"Body":         template.HTML(html.body),
-		"Breadcrumb":   array,
-		"Public":       public,
-		"PublicURL":    publicURL,
-		"LastModified": html.lastUpdate,
-		"Author":       html.author,
-	})
-}
-
 func deletefunc(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
-	title := c.Param("title")
-	s3.deleteMarkdown(title)
-	s3.deleteHTML(title)
+	titleHash := c.Param("titleHash")
+	s3.deleteMarkdown(titleHash)
+	s3.deleteHTML(titleHash)
 	c.Redirect(http.StatusFound, "/")
 }
 
 func putfunc(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
-	title := c.Param("title")
+	titleHash := c.Param("titleHash")
+	title, _ := c.GetPostForm("title")
+	if titleHash != s3.titleHash(title) {
+		return
+	}
 
 	session := sessions.Default(c)
 	user := session.Get("user")
 
-	id, err := s3.loadDocumentID(title)
+	id, err := s3.loadDocumentID(titleHash)
 	if err != nil {
 		id, err = randomString()
 		if err != nil {
@@ -176,16 +192,18 @@ func putfunc(c *gin.Context) {
 
 	var markdown, html pageData
 
+	markdown.titleHash = titleHash
 	markdown.title = title
 	markdown.author = user.(string)
 	markdown.body, _ = c.GetPostForm("body")
 	markdown.id = id
 	s3.saveMarkdown(markdown)
 
+	html.titleHash = titleHash
 	html.title = title
 	html.author = user.(string)
-	html.body, _ = MarkdownToHTML([]byte(markdown.body))
+	html.body, _ = MarkdownToHTML(s3, []byte(markdown.body))
 	html.id = id
 	s3.saveHTML(html)
-	c.Redirect(http.StatusFound, "/page/"+title)
+	c.Redirect(http.StatusFound, "/page/"+titleHash)
 }

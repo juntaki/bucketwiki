@@ -26,7 +26,7 @@ $(function() {
 <div class="ui menu">
     <div class="header item">Bucket Wiki</div>
     <a href="#" class="item"><i class="icon history"></i>History</a>
-    <a href="/page/{{.Title}}" class="item"><i class="icon backward"></i>Cancel</a>
+    <a href="/page/{{.TitleHash}}" class="item"><i class="icon backward"></i>Cancel</a>
     <a href="#" onclick="javascript:document.edit.submit();return false;" class="item"><i class="icon save"></i>Save</a>
     <div class="right menu">
         <a href="#" class="item"><i class="icon settings"></i>Setting</a>
@@ -37,15 +37,16 @@ $(function() {
     <div class="ui breadcrumb">
         <a class="section" href="/">Home</a>
         <i class="right chevron icon divider"></i>
-        <div class="section"><a href="/page/{{.Title}}">{{.Title}}</a></div>
+        <div class="section"><a href="/page/{{.TitleHash}}">{{.Title}}</a></div>
         <i class="right chevron icon divider"></i>
         <div class="active section">Editing {{.Title}}</div>
     </div>
     <div class="row">
         <div class="eight wide column">
-            <form name="edit" action="/page/{{.Title}}" method="post">
+            <form name="edit" action="/page/{{.TitleHash}}" method="post">
                 <textarea name="body" id="editor">{{printf "%s" .Body}}</textarea>
                 <input type="hidden" name="_method" value="put">
+                <input type="hidden" name="title" value="{{.Title}}">
             </form>
         </div>
         <div class="eight wide column">

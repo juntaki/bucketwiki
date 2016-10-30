@@ -27,7 +27,7 @@
 <div class="ui menu">
         <div class="header item">Bucket Wiki</div>
         <a href="#" class="item"><i class="icon history"></i>History</a>
-        <a href="/page/{{.Title}}/edit" class="item"><i class="icon edit"></i>Edit</a>
+        <a href="/page/{{.TitleHash}}/edit?title={{.Title}}" class="item"><i class="icon edit"></i>Edit</a>
         <div class="right menu">
             <a href="#" class="item"><i class="icon settings"></i>Setting</a>
             <a href="/logout" class="item"><i class="icon sign out"></i>Logout</a>
@@ -39,7 +39,9 @@
             <a class="section" href="/">Home</a>
             <i class="right chevron icon divider"></i>
             {{range $var := .Breadcrumb}}
-            <div class="section"><a href="/page/{{$var}}">{{$var}}</a></div>
+            {{$title := index $var 0}}
+            {{$titleHash := index $var 1}}
+            <div class="section"><a href="/page/{{$titleHash}}">{{$title}}</a></div>
             <i class="right arrow icon divider"></i>
             {{end}}
             <div class="active section">{{.Title}}</div>
@@ -48,7 +50,7 @@
     <div class="right floated right aligned eight wide column">
         {{if .Public}}
         <div class="ui input">
-            <form action="/page/{{.Title}}/acl" method="post">
+            <form action="/page/{{.TitleHash}}/acl" method="post">
                 <input type="hidden" name="acl" value="private">
                 <button class="ui basic green button" data-tooltip="Make this page private" data-position="bottom right"><i class="unhide icon"></i>Public</button>
             </form>
@@ -60,7 +62,7 @@
             </button>
         </div>
         {{else}}
-        <form action="/page/{{.Title}}/acl" method="post">
+        <form action="/page/{{.TitleHash}}/acl" method="post">
             <input type="hidden" name="acl" value="public">
             <button class="ui basic gray button" data-tooltip="Make this page Public" data-position="bottom right"><i class="hide icon"></i>Private</button>
         </form>

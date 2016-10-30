@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"regexp"
 	"time"
 )
 
 // MarkdownToHTML convert markdown to html
-func MarkdownToHTML(text []byte) (string, error) {
+func MarkdownToHTML(s3 *Wikidata, text []byte) (string, error) {
 	req, err := http.NewRequest(
 		"POST",
 		"https://api.github.com/markdown/raw",
@@ -29,11 +28,13 @@ func MarkdownToHTML(text []byte) (string, error) {
 	defer resp.Body.Close()
 
 	// Wiki Link: convert "[[Page title]]" to Linked text
-	rep := regexp.MustCompile(`\[\[(.*?)\]\]`)
-	title := "$1"
-	escapedTitle := (&url.URL{Path: title}).String()
+	rep := regexp.MustCompile(`\[\[.*?\]\]`)
+
 	str := string(body)
 
-	str = rep.ReplaceAllString(str, "<a href=\"/page/"+escapedTitle+"\">"+title+"</a>")
+	str = rep.ReplaceAllStringFunc(str, func(a string) string {
+		title := a[2 : len(a)-2]
+		return "<a href=\"/page/" + s3.titleHash(title) + "?title=" + title + "\">" + title + "</a>"
+	})
 	return str, err
 }
