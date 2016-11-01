@@ -207,13 +207,22 @@ func putfunc(c *gin.Context) {
 	markdown.author = user.(string)
 	markdown.body, _ = c.GetPostForm("body")
 	markdown.id = id
-	s3.saveMarkdown(markdown)
+	err = s3.saveMarkdown(markdown)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/500")
+		return
+	}
 
 	html.titleHash = titleHash
 	html.title = title
 	html.author = user.(string)
 	html.body, _ = MarkdownToHTML(s3, []byte(markdown.body))
 	html.id = id
-	s3.saveHTML(html)
+	err = s3.saveHTML(html)
+	if err != nil {
+		c.Redirect(http.StatusFound, "/500")
+		return
+	}
+
 	c.Redirect(http.StatusFound, "/page/"+titleHash)
 }
