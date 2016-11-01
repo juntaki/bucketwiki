@@ -9,8 +9,8 @@ WORKDIR /wiki
 COPY * /wiki/
 COPY style/ /wiki/style/
 
-RUN apk add --no-cache go git && \\
-    go get -v && \\
+RUN apk add --no-cache go git && \
+    go get -v && \
     go build
 
 ENTRYPOINT ["/wiki/wiki"]
