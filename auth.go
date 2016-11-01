@@ -51,7 +51,7 @@ func authCallback(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
 	user, err := gothic.CompleteUserAuth(c.Writer, c.Request)
 	if err != nil {
-		c.Redirect(http.StatusInternalServerError, "/500")
+		c.Redirect(http.StatusFound, "/500")
 		return
 	}
 
@@ -185,7 +185,7 @@ func postsignupfunc(c *gin.Context) {
 	err = s3.saveUser(user)
 	if err != nil {
 		fmt.Println("saveUser failed")
-		c.Redirect(http.StatusInternalServerError, "/500")
+		c.Redirect(http.StatusFound, "/500")
 		return
 	}
 

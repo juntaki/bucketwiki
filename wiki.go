@@ -184,7 +184,7 @@ func putfunc(c *gin.Context) {
 	titleHash := c.Param("titleHash")
 	title, _ := c.GetPostForm("title")
 	if titleHash != s3.titleHash(title) {
-		c.Redirect(http.StatusInternalServerError, "/500")
+		c.Redirect(http.StatusFound, "/500")
 		return
 	}
 
@@ -195,7 +195,7 @@ func putfunc(c *gin.Context) {
 	if err != nil {
 		id, err = randomString()
 		if err != nil {
-			c.Redirect(http.StatusInternalServerError, "/500")
+			c.Redirect(http.StatusFound, "/500")
 			return
 		}
 	}
