@@ -205,7 +205,7 @@ func (w *Wikidata) loadHTML(titleHash string) (*pageData, error) {
 		if err != nil {
 			return nil, err
 		}
-		page.title = title
+		page.title = string(title)
 	}
 	if respGet.Metadata["Id"] != nil {
 		page.id = *respGet.Metadata["Id"]
@@ -239,7 +239,7 @@ func (w *Wikidata) loadMarkdown(titleHash string) (*pageData, error) {
 		if err != nil {
 			return nil, err
 		}
-		page.title = title
+		page.title = string(title)
 	}
 	if respGet.Metadata["Id"] != nil {
 		page.id = *respGet.Metadata["Id"]
