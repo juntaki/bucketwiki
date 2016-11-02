@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -110,7 +111,7 @@ func (w *Wikidata) saveHTML(page pageData) error {
 		Metadata: map[string]*string{
 			"Id":     aws.String(page.id),
 			"Author": aws.String(page.author),
-			"Title":  aws.String(page.title),
+			"Title":  aws.String(base64.StdEncoding.EncodeToString([]byte(page.title))),
 		},
 	}
 	_, err := w.svc.PutObject(params)
@@ -130,7 +131,7 @@ func (w *Wikidata) saveMarkdown(page pageData) error {
 		Metadata: map[string]*string{
 			"Id":     aws.String(page.id),
 			"Author": aws.String(page.author),
-			"Title":  aws.String(page.title),
+			"Title":  aws.String(base64.StdEncoding.EncodeToString([]byte(page.title))),
 		},
 	}
 	_, err := w.svc.PutObject(params)
@@ -200,7 +201,11 @@ func (w *Wikidata) loadHTML(titleHash string) (*pageData, error) {
 		body:       string(body),
 	}
 	if respGet.Metadata["Title"] != nil {
-		page.title = *respGet.Metadata["Title"]
+		title, err := base64.StdEncoding.DecodeString(*respGet.Metadata["Title"])
+		if err != nil {
+			return nil, err
+		}
+		page.title = title
 	}
 	if respGet.Metadata["Id"] != nil {
 		page.id = *respGet.Metadata["Id"]
@@ -230,7 +235,11 @@ func (w *Wikidata) loadMarkdown(titleHash string) (*pageData, error) {
 		body:       string(body),
 	}
 	if respGet.Metadata["Title"] != nil {
-		page.title = *respGet.Metadata["Title"]
+		title, err := base64.StdEncoding.DecodeString(*respGet.Metadata["Title"])
+		if err != nil {
+			return nil, err
+		}
+		page.title = title
 	}
 	if respGet.Metadata["Id"] != nil {
 		page.id = *respGet.Metadata["Id"]
