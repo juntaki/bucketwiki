@@ -28,6 +28,7 @@ $(function() {
     <a href="#" class="item"><i class="icon history"></i>History</a>
     <a href="/page/{{.TitleHash}}" class="item"><i class="icon backward"></i>Cancel</a>
     <a href="#" onclick="javascript:document.edit.submit();return false;" class="item"><i class="icon save"></i>Save</a>
+    <a href="#" onclick="javascript:document.delete.submit();return false;" class="item"><i class="icon delete"></i>Delete</a>
     <div class="right menu">
         <a href="#" class="item"><i class="icon settings"></i>Setting</a>
         <a href="#" class="item"><i class="icon sign out"></i>Logout</a>
@@ -54,5 +55,8 @@ $(function() {
         </div>
     </div>
 </div>
+<form name="delete" action="/page/{{.TitleHash}}" method="post">
+    <input type="hidden" name="_method" value="delete">
+</form>
 </body>
 </html>
