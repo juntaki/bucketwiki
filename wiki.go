@@ -185,6 +185,9 @@ func putfunc(c *gin.Context) {
 	title, _ := c.GetPostForm("title")
 	if titleHash != s3.titleHash(title) {
 		fmt.Println("title not match")
+		fmt.Println("title:", title)
+		fmt.Println("generated:", s3.titleHash(title))
+		fmt.Println("titleHash:", titleHash)
 		c.Redirect(http.StatusFound, "/500")
 		return
 	}
@@ -196,7 +199,7 @@ func putfunc(c *gin.Context) {
 	if err != nil {
 		id, err = randomString()
 		if err != nil {
-			fmt.Println("random string cannot be generated")
+			fmt.Println("random string cannot be generated", err)
 			c.Redirect(http.StatusFound, "/500")
 			return
 		}
@@ -211,7 +214,7 @@ func putfunc(c *gin.Context) {
 	markdown.id = id
 	err = s3.saveMarkdown(markdown)
 	if err != nil {
-		fmt.Println("save Markdown")
+		fmt.Println("save Markdown", err)
 		c.Redirect(http.StatusFound, "/500")
 		return
 	}
@@ -223,7 +226,7 @@ func putfunc(c *gin.Context) {
 	html.id = id
 	err = s3.saveHTML(html)
 	if err != nil {
-		fmt.Println("save HTML")
+		fmt.Println("save HTML", err)
 		c.Redirect(http.StatusFound, "/500")
 		return
 	}
