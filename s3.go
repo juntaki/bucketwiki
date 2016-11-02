@@ -107,7 +107,7 @@ func (w *Wikidata) saveHTML(page pageData) error {
 		Bucket:      aws.String(w.bucket),
 		Key:         aws.String("page/" + page.titleHash + "/index.html"),
 		Body:        strings.NewReader(page.body),
-		ContentType: aws.String("text/html"),
+		ContentType: aws.String("text/html; charset=utf-8"),
 		Metadata: map[string]*string{
 			"Id":     aws.String(page.id),
 			"Author": aws.String(page.author),
