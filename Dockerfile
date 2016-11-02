@@ -11,7 +11,9 @@ COPY style/ /wiki/style/
 
 RUN apk add --no-cache go git && \
     go get -v && \
-    go build
+    go build && \
+    rm -rf /go && \
+    apk del go git
 
 ENTRYPOINT ["/wiki/wiki"]
 EXPOSE 8080
