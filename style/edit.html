@@ -2,24 +2,24 @@
 <html>
 <head>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.2.4/semantic.min.css"/>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/simplemde/1.11.2/simplemde.min.css">
 <link rel="stylesheet" href="/layout.css" type="text/css">
-
 <title>{{.Title}} - Bucket Wiki</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.2.4/semantic.min.js"></script>
-<script src="https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.js"></script>
 </head>
 <body>
 <div class="ui menu">
     <div class="header item">Bucket Wiki</div>
     <a href="#" class="item"><i class="icon history"></i>History</a>
     <a href="/page/{{.TitleHash}}" class="item"><i class="icon backward"></i>Cancel</a>
-    <a href="#" onclick="javascript:document.edit.submit();return false;" class="item"><i class="icon save"></i>Save</a>
-    <a href="#" onclick="javascript:document.delete.submit();return false;" class="item"><i class="icon delete"></i>Delete</a>
+    <a href="#" onclick="javascript:document.edit.submit();return false;" class="item">
+        <i class="icon save"></i>Save
+    </a>
+    <a href="#" onclick="javascript:document.delete.submit();return false;" class="item">
+        <i class="icon delete"></i>Delete
+    </a>
     <div class="right menu">
         <a href="#" class="item"><i class="icon settings"></i>Setting</a>
-        <a href="#" class="item"><i class="icon sign out"></i>Logout</a>
+        <a href="/logout" class="item"><i class="icon sign out"></i>Logout</a>
     </div>
 </div>
 <div class="ui padded grid">
@@ -36,18 +36,20 @@
             <input type="hidden" name="_method" value="put">
             <input type="hidden" name="title" value="{{.Title}}">
         </form>
-
-        <script>
-         var simplemde = new SimpleMDE({
-             element: document.getElementById("editor"),
-             autofocus: true,
-             spellChecker: false
-         });
-        </script>
     </div>
 </div>
 <form name="delete" action="/page/{{.TitleHash}}" method="post">
     <input type="hidden" name="_method" value="delete">
 </form>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.2.4/semantic.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/simplemde/1.11.2/simplemde.min.js"></script>
+<script>
+ var simplemde = new SimpleMDE({
+     element: document.getElementById("editor"),
+     autofocus: true,
+     spellChecker: false
+ });
+</script>
 </body>
 </html>
