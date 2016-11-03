@@ -1,26 +1,14 @@
 <!DOCTYPE html>
 <html>
 <head>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/2.4.1/github-markdown.min.css" type="text/css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.2.4/semantic.min.css"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.css">
 <link rel="stylesheet" href="/layout.css" type="text/css">
 
 <title>{{.Title}} - Bucket Wiki</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.2.4/semantic.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/0.3.6/marked.min.js"></script>
-<script type="text/javascript">
-$(function() {
-     marked.setOptions({
-         langPrefix: ''
-     });
-     $('#editor').keyup(function() {
-         var src = $(this).val();
-         var html = marked(src);
-         $('#result').html(html);
-     });
- });
-</script>
+<script src="https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.js"></script>
 </head>
 <body>
 <div class="ui menu">
@@ -42,17 +30,20 @@ $(function() {
         <i class="right chevron icon divider"></i>
         <div class="active section">Editing {{.Title}}</div>
     </div>
-    <div class="row">
-        <div class="eight wide column">
-            <form name="edit" action="/page/{{.TitleHash}}" method="post">
-                <textarea name="body" id="editor">{{printf "%s" .Body}}</textarea>
-                <input type="hidden" name="_method" value="put">
-                <input type="hidden" name="title" value="{{.Title}}">
-            </form>
-        </div>
-        <div class="eight wide column">
-            <div class="markdown-body" id="result"></div>
-        </div>
+    <div class="sixteen wide column">
+        <form name="edit" action="/page/{{.TitleHash}}" method="post">
+            <textarea id="editor" name="body">{{printf "%s" .Body}}</textarea>
+            <input type="hidden" name="_method" value="put">
+            <input type="hidden" name="title" value="{{.Title}}">
+        </form>
+
+        <script>
+         var simplemde = new SimpleMDE({
+             element: document.getElementById("editor"),
+             autofocus: true,
+             spellChecker: false
+         });
+        </script>
     </div>
 </div>
 <form name="delete" action="/page/{{.TitleHash}}" method="post">

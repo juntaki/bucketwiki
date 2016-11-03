@@ -8,8 +8,6 @@ body {
     margin: 5em 0em 0em;
 }
 
-textarea {
-    resize: none;
-    height: calc(100vh - 100px);
-    width:100%;
+.CodeMirror {
+    height: calc(100vh - 200px);
 }
