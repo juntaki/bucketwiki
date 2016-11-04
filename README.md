@@ -2,10 +2,10 @@
 
 A simple Wiki system written in golang.
 
+![screenshot](https://github.com/juntaki/bucketwiki/blob/master/screenshot.gif?raw=true)
+
 * Amazon S3 back-end, No need to setup/backup database.
 * Easy to share a page to the public
-
-
 
 ## Build and run
 
