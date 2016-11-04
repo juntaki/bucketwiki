@@ -35,6 +35,7 @@ func main() {
 	router.StaticFile("/500", "style/500.html")
 	router.StaticFile("/layout.css", "style/layout.css")
 	router.StaticFile("/favicon.ico", "style/favicon.ico")
+	router.POST("/page/:titleHash/upload", uploadfunc)
 
 	auth := router.Group("/")
 	auth.Use(authMiddleware())
@@ -44,6 +45,7 @@ func main() {
 			c.Redirect(http.StatusFound, "/page/"+s3.titleHash("Home")+"?title=Home")
 		})
 		auth.GET("/page/:titleHash/edit", editfunc)
+		auth.GET("/page/:titleHash/file/:filename", getfilefunc)
 		auth.GET("/page/:titleHash", getfunc)
 		auth.POST("/page/:titleHash", postfunc)
 		auth.POST("/page/:titleHash/acl", aclfunc)
@@ -93,8 +95,38 @@ func aclfunc(c *gin.Context) {
 	c.Redirect(http.StatusFound, "/page/"+titleHash)
 }
 
+func uploadfunc(c *gin.Context) {
+	s3 := c.MustGet("S3").(*Wikidata)
+	titleHash := c.Param("titleHash")
+	page, err := s3.loadMarkdownMetadata(titleHash)
+	if err != nil {
+		fmt.Println(err)
+	}
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		fmt.Println(err)
+	}
+	filename := header.Filename
+	contentType := header.Header["Content-Type"][0]
+
+	s3.saveFile(page, file, filename, contentType)
+}
+
 type breadcrumb struct {
 	List []([]string) `json:"list"`
+}
+
+func getfilefunc(c *gin.Context) {
+	s3 := c.MustGet("S3").(*Wikidata)
+	titleHash := c.Param("titleHash")
+	filename := c.Param("filename")
+
+	contentType, data, err := s3.loadFile(titleHash, filename)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	c.Data(http.StatusOK, contentType, data)
 }
 
 func getfunc(c *gin.Context) {
@@ -195,24 +227,13 @@ func putfunc(c *gin.Context) {
 	session := sessions.Default(c)
 	user := session.Get("user")
 
-	id, err := s3.loadDocumentID(titleHash)
-	if err != nil {
-		id, err = randomString()
-		if err != nil {
-			fmt.Println("random string cannot be generated", err)
-			c.Redirect(http.StatusFound, "/500")
-			return
-		}
-	}
-
 	var markdown, html pageData
 
 	markdown.titleHash = titleHash
 	markdown.title = title
 	markdown.author = user.(string)
 	markdown.body, _ = c.GetPostForm("body")
-	markdown.id = id
-	err = s3.saveMarkdown(markdown)
+	err := s3.saveMarkdown(markdown)
 	if err != nil {
 		fmt.Println("save Markdown", err)
 		c.Redirect(http.StatusFound, "/500")
@@ -223,7 +244,6 @@ func putfunc(c *gin.Context) {
 	html.title = title
 	html.author = user.(string)
 	html.body, _ = MarkdownToHTML(s3, []byte(markdown.body))
-	html.id = id
 	err = s3.saveHTML(html)
 	if err != nil {
 		fmt.Println("save HTML", err)

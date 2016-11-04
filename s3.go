@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"mime/multipart"
 	"os"
 	"strings"
 	"time"
@@ -122,6 +123,36 @@ func (w *Wikidata) saveHTML(page pageData) error {
 	return nil
 }
 
+func (w *Wikidata) saveFile(page *pageData, file multipart.File, filename string, contentType string) error {
+	params := &s3.PutObjectInput{
+		Bucket:      aws.String(w.bucket),
+		Key:         aws.String("page/" + page.titleHash + "/file/" + filename),
+		Body:        file,
+		ContentType: aws.String(contentType),
+	}
+	_, err := w.svc.PutObject(params)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (w *Wikidata) loadFile(titleHash, filename string) (string, []byte, error) {
+	fmt.Println("key:", "page/"+titleHash+"/index.md")
+	paramsGet := &s3.GetObjectInput{
+		Bucket: aws.String(w.bucket),
+		Key:    aws.String("page/" + titleHash + "/file/" + filename),
+	}
+	respGet, err := w.svc.GetObject(paramsGet)
+	if err != nil {
+		return "", nil, err
+	}
+
+	body, _ := ioutil.ReadAll(respGet.Body)
+	return *respGet.ContentType, body, nil
+}
+
 func (w *Wikidata) saveMarkdown(page pageData) error {
 	params := &s3.PutObjectInput{
 		Bucket:      aws.String(w.bucket),
@@ -233,6 +264,37 @@ func (w *Wikidata) loadMarkdown(titleHash string) (*pageData, error) {
 		titleHash:  titleHash,
 		lastUpdate: *respGet.LastModified,
 		body:       string(body),
+	}
+	if respGet.Metadata["Title"] != nil {
+		title, err := base64.StdEncoding.DecodeString(*respGet.Metadata["Title"])
+		if err != nil {
+			return nil, err
+		}
+		page.title = string(title)
+	}
+	if respGet.Metadata["Id"] != nil {
+		page.id = *respGet.Metadata["Id"]
+	}
+	if respGet.Metadata["Author"] != nil {
+		page.author = *respGet.Metadata["Author"]
+	}
+	return &page, nil
+}
+
+func (w *Wikidata) loadMarkdownMetadata(titleHash string) (*pageData, error) {
+	fmt.Println("key:", "page/"+titleHash+"/index.md")
+	paramsGet := &s3.HeadObjectInput{
+		Bucket: aws.String(w.bucket),
+		Key:    aws.String("page/" + titleHash + "/index.md"),
+	}
+	respGet, err := w.svc.HeadObject(paramsGet)
+	if err != nil {
+		return nil, err
+	}
+
+	page := pageData{
+		titleHash:  titleHash,
+		lastUpdate: *respGet.LastModified,
 	}
 	if respGet.Metadata["Title"] != nil {
 		title, err := base64.StdEncoding.DecodeString(*respGet.Metadata["Title"])
