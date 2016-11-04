@@ -2,19 +2,12 @@
 
 A simple Wiki system written in golang.
 
-* Amazon S3 back-end
-* GitHub Flavored Markdown
+* Amazon S3 back-end, No need to setup/backup database.
 * Easy to share a page to the public
 
-* Not searchable :p
+
 
 ## Build and run
-
-Get dependencies
-
-~~~
-go get -v
-~~~
 
 Set your bucket name and credentials to environment variable.
 
@@ -30,9 +23,10 @@ WIKI_ID=<arbitrary string for your wiki>
 SESSION_SECRET=<Session secret>
 ~~~
 
-Build
+Get dependencies and build
 
 ~~~
+go get -v
 go build
 ~~~
 
@@ -53,3 +47,11 @@ docker run -d -p 8080:8080\
     -e SESSION_SECRET="<Session secret>" \
     juntaki/BucketWiki
 ~~~
+
+## License
+
+MIT
+
+## Author
+
+juntaki 
