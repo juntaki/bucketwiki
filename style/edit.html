@@ -101,7 +101,7 @@
  }
 
  myDropzone.on("addedfile", function(file) {
-     simplemde.codemirror.replaceSelection("![" + file.name + "](file/" + file.name + ")");
+     simplemde.codemirror.replaceSelection("![" + file.name + "](/page/{{.TitleHash}}/file/" + file.name + ")");
  });
 
 </script>
