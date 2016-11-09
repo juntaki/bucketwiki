@@ -13,7 +13,7 @@ func editfunc(c *gin.Context) {
 	titleHash := c.Param("titleHash")
 	title := c.Query("title")
 	body := "# " + title + "\n"
-	markdown, err := s3.loadMarkdown(titleHash)
+	markdown, err := s3.loadMarkdown(titleHash, "")
 	if err == nil {
 		body = markdown.body
 	}
@@ -76,7 +76,7 @@ func putfunc(c *gin.Context) {
 	session := sessions.Default(c)
 	user := session.Get("user")
 
-	var markdown, html pageData
+	var markdown pageData
 
 	markdown.titleHash = titleHash
 	markdown.title = title
@@ -89,16 +89,16 @@ func putfunc(c *gin.Context) {
 		return
 	}
 
-	html.titleHash = titleHash
-	html.title = title
-	html.author = user.(string)
-	html.body, _ = MarkdownToHTML(s3, []byte(markdown.body))
-	err = s3.saveHTML(html)
-	if err != nil {
-		fmt.Println("save HTML", err)
-		c.Redirect(http.StatusFound, "/500")
-		return
-	}
+	// html.titleHash = titleHash
+	// html.title = title
+	// html.author = user.(string)
+	// html.body, _ = MarkdownToHTML(s3, []byte(markdown.body))
+	// err = s3.saveHTML(html)
+	// if err != nil {
+	// 	fmt.Println("save HTML", err)
+	// 	c.Redirect(http.StatusFound, "/500")
+	// 	return
+	// }
 
 	c.Redirect(http.StatusFound, "/page/"+titleHash)
 }

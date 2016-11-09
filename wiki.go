@@ -9,6 +9,8 @@ import (
 
 	"github.com/gin-gonic/contrib/sessions"
 	"github.com/gin-gonic/gin"
+	"github.com/microcosm-cc/bluemonday"
+	"github.com/russross/blackfriday"
 )
 
 func main() {
@@ -35,7 +37,6 @@ func main() {
 	router.StaticFile("/500", "style/500.html")
 	router.StaticFile("/layout.css", "style/layout.css")
 	router.StaticFile("/favicon.ico", "style/favicon.ico")
-	router.POST("/page/:titleHash/upload", uploadfunc)
 
 	auth := router.Group("/")
 	auth.Use(authMiddleware())
@@ -44,7 +45,9 @@ func main() {
 			// For first access, title query should be passed.
 			c.Redirect(http.StatusFound, "/page/"+s3.titleHash("Home")+"?title=Home")
 		})
+		auth.POST("/page/:titleHash/upload", uploadfunc)
 		auth.GET("/page/:titleHash/edit", editfunc)
+		auth.GET("/page/:titleHash/history", gethistory)
 		auth.GET("/page/:titleHash/file/:filename", getfilefunc)
 		auth.GET("/page/:titleHash", getfunc)
 		auth.POST("/page/:titleHash", postfunc)
@@ -96,17 +99,39 @@ func getfilefunc(c *gin.Context) {
 	c.Data(http.StatusOK, contentType, data)
 }
 
+func gethistory(c *gin.Context) {
+	s3 := c.MustGet("S3").(*Wikidata)
+	titleHash := c.Param("titleHash")
+	title := c.Query("title")
+
+	history, _ := s3.listhistory(titleHash)
+	c.HTML(http.StatusOK, "history.html", gin.H{
+		"Title":     title,
+		"TitleHash": titleHash,
+		"List":      history,
+	})
+}
+
 func getfunc(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
 	titleHash := c.Param("titleHash")
-	html, err := s3.loadHTML(titleHash)
+	version := c.Query("history")
+	fmt.Println(version)
+	md, err := s3.loadMarkdown(titleHash, version)
 	if err != nil {
 		// If no object found, title cannot get from metadata, so it must be passed via query.
-		title := c.Query("title")
-		c.Redirect(http.StatusFound, "/page/"+titleHash+"/edit?title="+title)
-		return
+		if version == "" {
+			title := c.Query("title")
+			c.Redirect(http.StatusFound, "/page/"+titleHash+"/edit?title="+title)
+			return
+		} else {
+			// TOOO: 404
+			return
+		}
 	}
-	title := html.title
+	unsafe := blackfriday.MarkdownCommon([]byte(md.body))
+	html := bluemonday.UGCPolicy().SanitizeBytes(unsafe)
+	title := md.title
 
 	public := s3.checkPublic(titleHash)
 	publicURL := s3.publicURL(titleHash)
@@ -150,11 +175,11 @@ func getfunc(c *gin.Context) {
 	c.HTML(http.StatusOK, "view.html", gin.H{
 		"Title":        title,
 		"TitleHash":    titleHash,
-		"Body":         template.HTML(html.body),
+		"Body":         template.HTML(html),
 		"Breadcrumb":   array,
 		"Public":       public,
 		"PublicURL":    publicURL,
-		"LastModified": html.lastUpdate,
-		"Author":       html.author,
+		"LastModified": md.lastUpdate,
+		"Author":       md.author,
 	})
 }

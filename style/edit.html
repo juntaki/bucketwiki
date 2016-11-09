@@ -10,7 +10,7 @@
 <body>
 <div class="ui menu">
     <div class="header item">Bucket Wiki</div>
-    <a href="#" class="item"><i class="icon history"></i>History</a>
+    <a href="/page/{{.TitleHash}}/history?title={{.Title}}" class="item"><i class="icon history"></i>History</a>
     <a href="/page/{{.TitleHash}}" class="item"><i class="icon backward"></i>Cancel</a>
     <a href="#" onclick="javascript:document.edit.submit();return false;" class="item">
         <i class="icon save"></i>Save

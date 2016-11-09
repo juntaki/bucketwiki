@@ -165,6 +165,7 @@ func (w *Wikidata) saveMarkdown(page pageData) error {
 			"Title":  aws.String(base64.StdEncoding.EncodeToString([]byte(page.title))),
 		},
 	}
+	// TODO: Calculate Etag value and dont upload it.
 	_, err := w.svc.PutObject(params)
 	if err != nil {
 		return err
@@ -247,12 +248,18 @@ func (w *Wikidata) loadHTML(titleHash string) (*pageData, error) {
 	return &page, nil
 }
 
-func (w *Wikidata) loadMarkdown(titleHash string) (*pageData, error) {
+func (w *Wikidata) loadMarkdown(titleHash string, versionID string) (*pageData, error) {
 	fmt.Println("key:", "page/"+titleHash+"/index.md")
 	paramsGet := &s3.GetObjectInput{
 		Bucket: aws.String(w.bucket),
 		Key:    aws.String("page/" + titleHash + "/index.md"),
 	}
+	if versionID != "" {
+		paramsGet.VersionId = aws.String(versionID)
+	}
+
+	fmt.Println(paramsGet)
+
 	respGet, err := w.svc.GetObject(paramsGet)
 	if err != nil {
 		return nil, err
@@ -365,6 +372,27 @@ func (w *Wikidata) list() ([]string, error) {
 		item = strings.TrimLeft(item, "page/")
 		result = append(result, item)
 	}
+	return result, nil
+}
+
+func (w *Wikidata) listhistory(titleHash string) ([][]string, error) {
+	params := &s3.ListObjectVersionsInput{
+		Bucket:  aws.String(w.bucket),
+		Prefix:  aws.String("page/" + titleHash + "/index.md"),
+		MaxKeys: aws.Int64(10),
+	}
+	resp, err := w.svc.ListObjectVersions(params)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var result [][]string
+	for _, v := range resp.Versions {
+		version := []string{v.LastModified.String(), *v.VersionId}
+		result = append(result, version)
+	}
+	fmt.Println(result)
 	return result, nil
 }
 
