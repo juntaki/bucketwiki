@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/2.4.1/github-markdown.min.css" type="text/css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.2.4/semantic.min.css"/>
+<link rel="stylesheet" href="/layout.css" type="text/css">
+<title>{{.Title}} - Bucket Wiki</title>
+</head>
+<body>
+<div class="ui menu">
+    <div class="header item">Bucket Wiki</div>
+    <a href="/page/{{.TitleHash}}/edit?title={{.Title}}" class="item"><i class="icon edit"></i>Edit</a>
+    <div class="right menu">
+        <a href="#" class="item"><i class="icon settings"></i>Setting</a>
+        <a href="/logout" class="item"><i class="icon sign out"></i>Logout</a>
+    </div>
+</div>
+<div class="ui horizontally padded grid">
+    <div class="left floated eight wide column">
+        <div class="ui breadcrumb">
+            <a class="section" href="/">Home</a>
+            <i class="right chevron icon divider"></i>
+            <div class="active section">{{.Title}}</div>
+        </div>
+    </div>
+</div>
+<div class="ui main container">
+    {{range $var := .List}}
+    {{$date := index $var 0}}
+    {{$history := index $var 1}}
+    <div class="section"><a href="/page/{{$.TitleHash}}?history={{$history}}">{{$date}}</a></div>
+    {{end}}
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.2.4/semantic.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/clipboard.js/1.5.13/clipboard.min.js"></script>
+<script>
+ $(function() {
+     var clipboard = new Clipboard('.btn');
+
+     clipboard.on('success', function(e) {
+         e.clearSelection();
+     });
+     $('.btn').popup({
+         on       : 'click',
+     });
+ });
+</script>
+</body>
+</html>
