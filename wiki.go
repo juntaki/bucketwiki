@@ -14,6 +14,15 @@ import (
 )
 
 func main() {
+	if os.Getenv("AWS_BUCKET_NAME") == "" ||
+		os.Getenv("AWS_BUCKET_REGION") == "" ||
+		os.Getenv("AWS_ACCESS_KEY_ID") == "" ||
+		os.Getenv("AWS_SECRET_ACCESS_KEY") == "" ||
+		os.Getenv("WIKI_SECRET") == "" {
+		fmt.Println("Error at environment variable")
+		os.Exit(1)
+	}
+
 	s3 := Wikidata{
 		bucket: os.Getenv("AWS_BUCKET_NAME"),
 		region: os.Getenv("AWS_BUCKET_REGION"),
@@ -21,7 +30,7 @@ func main() {
 	s3.connect()
 
 	router := gin.Default()
-	store := sessions.NewCookieStore([]byte("secret"))
+	store := sessions.NewCookieStore([]byte(s3.wikiSecret))
 	router.Use(sessions.Sessions("mysession", store))
 	router.LoadHTMLGlob("style/*.html")
 
@@ -35,6 +44,7 @@ func main() {
 	router.GET("/auth/callback", authCallback)
 	router.GET("/auth", authenticate)
 	router.StaticFile("/500", "style/500.html")
+	router.StaticFile("/404", "style/404.html")
 	router.StaticFile("/layout.css", "style/layout.css")
 	router.StaticFile("/favicon.ico", "style/favicon.ico")
 
@@ -55,6 +65,7 @@ func main() {
 		auth.PUT("/page/:titleHash", putfunc)
 		auth.DELETE("/page/:titleHash", deletefunc)
 	}
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -75,9 +86,9 @@ func aclfunc(c *gin.Context) {
 	acl, _ := c.GetPostForm("acl")
 	switch acl {
 	case "public":
-		s3.aclPublic(titleHash)
+		s3.setACL(titleHash, true)
 	case "private":
-		s3.aclPrivate(titleHash)
+		s3.setACL(titleHash, false)
 	}
 	c.Redirect(http.StatusFound, "/page/"+titleHash)
 }
@@ -125,7 +136,7 @@ func getfunc(c *gin.Context) {
 			c.Redirect(http.StatusFound, "/page/"+titleHash+"/edit?title="+title)
 			return
 		} else {
-			// TOOO: 404
+			c.Redirect(http.StatusFound, "/404")
 			return
 		}
 	}

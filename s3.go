@@ -15,14 +15,16 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/microcosm-cc/bluemonday"
+	"github.com/russross/blackfriday"
 )
 
 // Wikidata is storing data in S3
 type Wikidata struct {
-	svc    *s3.S3
-	bucket string
-	region string
-	wikiID string
+	svc        *s3.S3
+	bucket     string
+	region     string
+	wikiSecret string
 }
 
 type pageData struct {
@@ -43,7 +45,7 @@ type userData struct {
 }
 
 func (w *Wikidata) titleHash(titleHash string) string {
-	return fmt.Sprintf("%x", sha256.Sum256([]byte(titleHash+w.wikiID)))
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(titleHash+w.wikiSecret)))
 }
 
 func (w *Wikidata) publicURL(titleHash string) string {
@@ -80,40 +82,67 @@ func (w *Wikidata) deleteMarkdown(titleHash string) {
 }
 
 func (w *Wikidata) checkPublic(titleHash string) bool {
-	resp, _ := w.getacl("page/" + titleHash + "/index.html")
-	for _, g := range resp.Grants {
+	_, err := w.getacl("page/" + titleHash + "/index.html")
+	if err != nil {
+		return false
+	}
+	return true
+}
 
-		if g.Grantee.URI != nil &&
-			*g.Grantee.URI == "http://acs.amazonaws.com/groups/global/AllUsers" &&
-			g.Permission != nil &&
-			*g.Permission == "READ" {
-			return true
+func (w *Wikidata) setACL(titleHash string, public bool) error {
+	// public: Upload HTML and set file permission as public
+	// private: Delete HTML and set file permission as private
+	var err error
+	if public {
+		markdown, err := w.loadMarkdown(titleHash, "")
+		if err != nil {
+			return err
+		}
+		html := markdown
+
+		unsafe := blackfriday.MarkdownCommon([]byte(markdown.body))
+		html.body = string(bluemonday.UGCPolicy().SanitizeBytes(unsafe))
+
+		w.saveHTML(*html)
+		fmt.Println("HTML uploaded")
+	} else {
+		w.delete("page/" + titleHash + "/index.html")
+	}
+	if err != nil {
+		return err
+	}
+	params := &s3.ListObjectsV2Input{
+		Bucket:    aws.String(w.bucket),
+		MaxKeys:   aws.Int64(30),
+		Prefix:    aws.String("page/" + titleHash + "/file/"),
+		Delimiter: aws.String("/"),
+	}
+	resp, err := w.svc.ListObjectsV2(params)
+	if err != nil {
+		return err
+	}
+	for _, c := range resp.Contents {
+		if public {
+			err = w.putacl(*c.Key, s3.ObjectCannedACLPublicRead)
+		} else {
+			err = w.putacl(*c.Key, s3.ObjectCannedACLPrivate)
+		}
+		if err != nil {
+			return err
 		}
 	}
-	return false
-}
-
-func (w *Wikidata) aclPublic(titleHash string) error {
-	return w.putacl("page/"+titleHash+"/index.html", s3.ObjectCannedACLPublicRead)
-}
-
-func (w *Wikidata) aclPrivate(titleHash string) error {
-	return w.putacl("page/"+titleHash+"/index.html", s3.ObjectCannedACLPrivate)
+	return nil
 }
 
 // PUT request
-
+// saveHTML upload compiled HTML docment for publicURL
 func (w *Wikidata) saveHTML(page pageData) error {
 	params := &s3.PutObjectInput{
 		Bucket:      aws.String(w.bucket),
 		Key:         aws.String("page/" + page.titleHash + "/index.html"),
 		Body:        strings.NewReader(page.body),
 		ContentType: aws.String("text/html; charset=utf-8"),
-		Metadata: map[string]*string{
-			"Id":     aws.String(page.id),
-			"Author": aws.String(page.author),
-			"Title":  aws.String(base64.StdEncoding.EncodeToString([]byte(page.title))),
-		},
+		ACL:         aws.String(s3.ObjectCannedACLPublicRead),
 	}
 	_, err := w.svc.PutObject(params)
 	if err != nil {
@@ -123,12 +152,20 @@ func (w *Wikidata) saveHTML(page pageData) error {
 	return nil
 }
 
+// saveFile upload attached files to file directory
 func (w *Wikidata) saveFile(page *pageData, file multipart.File, filename string, contentType string) error {
 	params := &s3.PutObjectInput{
 		Bucket:      aws.String(w.bucket),
 		Key:         aws.String("page/" + page.titleHash + "/file/" + filename),
 		Body:        file,
 		ContentType: aws.String(contentType),
+	}
+
+	// Set the same ACL as HTML file
+	if w.checkPublic(page.titleHash) {
+		params.SetACL(s3.ObjectCannedACLPublicRead)
+	} else {
+		params.SetACL(s3.ObjectCannedACLPrivate)
 	}
 	_, err := w.svc.PutObject(params)
 	if err != nil {
@@ -214,40 +251,6 @@ func (w *Wikidata) loadUser(name string) (*userData, error) {
 	return &user, nil
 }
 
-func (w *Wikidata) loadHTML(titleHash string) (*pageData, error) {
-	fmt.Println("key:", "page/"+titleHash+"/index.html")
-	paramsGet := &s3.GetObjectInput{
-		Bucket: aws.String(w.bucket),
-		Key:    aws.String("page/" + titleHash + "/index.html"),
-	}
-	respGet, err := w.svc.GetObject(paramsGet)
-	if err != nil {
-		return nil, err
-	}
-
-	body, _ := ioutil.ReadAll(respGet.Body)
-
-	page := pageData{
-		titleHash:  titleHash,
-		lastUpdate: *respGet.LastModified,
-		body:       string(body),
-	}
-	if respGet.Metadata["Title"] != nil {
-		title, err := base64.StdEncoding.DecodeString(*respGet.Metadata["Title"])
-		if err != nil {
-			return nil, err
-		}
-		page.title = string(title)
-	}
-	if respGet.Metadata["Id"] != nil {
-		page.id = *respGet.Metadata["Id"]
-	}
-	if respGet.Metadata["Author"] != nil {
-		page.author = *respGet.Metadata["Author"]
-	}
-	return &page, nil
-}
-
 func (w *Wikidata) loadMarkdown(titleHash string, versionID string) (*pageData, error) {
 	fmt.Println("key:", "page/"+titleHash+"/index.md")
 	paramsGet := &s3.GetObjectInput{
@@ -257,8 +260,6 @@ func (w *Wikidata) loadMarkdown(titleHash string, versionID string) (*pageData, 
 	if versionID != "" {
 		paramsGet.VersionId = aws.String(versionID)
 	}
-
-	fmt.Println(paramsGet)
 
 	respGet, err := w.svc.GetObject(paramsGet)
 	if err != nil {
@@ -382,7 +383,6 @@ func (w *Wikidata) listhistory(titleHash string) ([][]string, error) {
 		MaxKeys: aws.Int64(10),
 	}
 	resp, err := w.svc.ListObjectVersions(params)
-
 	if err != nil {
 		return nil, err
 	}
@@ -392,7 +392,6 @@ func (w *Wikidata) listhistory(titleHash string) ([][]string, error) {
 		version := []string{v.LastModified.String(), *v.VersionId}
 		result = append(result, version)
 	}
-	fmt.Println(result)
 	return result, nil
 }
 
@@ -402,6 +401,6 @@ func (w *Wikidata) connect() error {
 		return err
 	}
 	w.svc = s3.New(sess, &aws.Config{Region: aws.String(w.region)})
-	w.wikiID = os.Getenv("WIKI_ID")
+	w.wikiSecret = os.Getenv("WIKI_SECRET")
 	return nil
 }

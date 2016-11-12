@@ -6,6 +6,8 @@ import (
 
 	"github.com/gin-gonic/contrib/sessions"
 	"github.com/gin-gonic/gin"
+	"github.com/microcosm-cc/bluemonday"
+	"github.com/russross/blackfriday"
 )
 
 func editfunc(c *gin.Context) {
@@ -89,16 +91,18 @@ func putfunc(c *gin.Context) {
 		return
 	}
 
-	// html.titleHash = titleHash
-	// html.title = title
-	// html.author = user.(string)
-	// html.body, _ = MarkdownToHTML(s3, []byte(markdown.body))
-	// err = s3.saveHTML(html)
-	// if err != nil {
-	// 	fmt.Println("save HTML", err)
-	// 	c.Redirect(http.StatusFound, "/500")
-	// 	return
-	// }
-
 	c.Redirect(http.StatusFound, "/page/"+titleHash)
+
+	// Async upload compiled HTML
+	if s3.checkPublic(markdown.titleHash) {
+		go func(s3 *Wikidata, markdown pageData) {
+			html := markdown
+
+			unsafe := blackfriday.MarkdownCommon([]byte(markdown.body))
+			html.body = string(bluemonday.UGCPolicy().SanitizeBytes(unsafe))
+
+			s3.saveHTML(html)
+			fmt.Println("HTML uploaded")
+		}(s3, markdown)
+	}
 }

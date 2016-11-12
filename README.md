@@ -19,8 +19,7 @@ AWS_SECRET_ACCESS_KEY=<secret access keys>
 TWITTER_KEY=<twitter key>
 TWITTER_SECRET=<twitter secret>
 URL=<external URL for callback like http://localhost:8080>
-WIKI_ID=<arbitrary string for your wiki>
-SESSION_SECRET=<Session secret>
+WIKI_SECRET=<arbitrary string for your wiki>
 ~~~
 
 Get dependencies and build
@@ -43,9 +42,8 @@ docker run -d -p 8080:8080\
     -e TWITTER_KEY="<twitter key>" \
     -e TWITTER_SECRET="<twitter secret>" \
     -e URL="<external URL for callback like http://localhost:8080>" \
-    -e WIKI_ID="<arbitrary string for your wiki>" \
-    -e SESSION_SECRET="<Session secret>" \
-    juntaki/BucketWiki
+    -e WIKI_SECRET="<arbitrary string for your wiki>" \
+    juntaki/bucketwiki
 ~~~
 
 ## License

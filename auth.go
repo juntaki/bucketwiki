@@ -27,7 +27,6 @@ func randomString() (string, error) {
 }
 
 func authMiddleware() gin.HandlerFunc {
-	fmt.Println("auth middleware")
 	goth.UseProviders(
 		twitter.New(
 			os.Getenv("TWITTER_KEY"),
