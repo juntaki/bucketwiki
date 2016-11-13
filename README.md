@@ -2,6 +2,9 @@
 
 A simple Wiki system written in golang.
 
+[![Build Status](https://travis-ci.org/juntaki/bucketwiki.svg?branch=master)](https://travis-ci.org/juntaki/bucketwiki)
+[![Coverage Status](https://coveralls.io/repos/github/juntaki/bucketwiki/badge.svg?branch=master)](https://coveralls.io/github/juntaki/bucketwiki?branch=master)
+
 ![screenshot](https://github.com/juntaki/bucketwiki/blob/master/screenshot.gif?raw=true)
 
 * Amazon S3 back-end, No need to setup/backup database.
