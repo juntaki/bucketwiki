@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"net/http"
 	"os"
+	"regexp"
 
 	"github.com/gin-gonic/contrib/sessions"
 	"github.com/gin-gonic/gin"
@@ -140,8 +141,8 @@ func getfunc(c *gin.Context) {
 			return
 		}
 	}
-	unsafe := blackfriday.MarkdownCommon([]byte(md.body))
-	html := bluemonday.UGCPolicy().SanitizeBytes(unsafe)
+
+	html := renderHTML(s3, md)
 	title := md.title
 
 	public := s3.checkPublic(titleHash)
@@ -193,4 +194,18 @@ func getfunc(c *gin.Context) {
 		"LastModified": md.lastUpdate,
 		"Author":       md.author,
 	})
+}
+
+func renderHTML(s3 *Wikidata, md *pageData) []byte {
+	rep := regexp.MustCompile(`\[\[.*?\]\]`)
+
+	str := md.body
+	str = rep.ReplaceAllStringFunc(str, func(a string) string {
+		title := a[2 : len(a)-2]
+		return "[" + title + "](/page/" + s3.titleHash(title) + "?title=" + title + ")"
+	})
+
+	unsafe := blackfriday.MarkdownCommon([]byte(str))
+	html := bluemonday.UGCPolicy().SanitizeBytes(unsafe)
+	return html
 }

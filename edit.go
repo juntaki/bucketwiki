@@ -6,8 +6,6 @@ import (
 
 	"github.com/gin-gonic/contrib/sessions"
 	"github.com/gin-gonic/gin"
-	"github.com/microcosm-cc/bluemonday"
-	"github.com/russross/blackfriday"
 )
 
 func editfunc(c *gin.Context) {
@@ -97,9 +95,7 @@ func putfunc(c *gin.Context) {
 	if s3.checkPublic(markdown.titleHash) {
 		go func(s3 *Wikidata, markdown pageData) {
 			html := markdown
-
-			unsafe := blackfriday.MarkdownCommon([]byte(markdown.body))
-			html.body = string(bluemonday.UGCPolicy().SanitizeBytes(unsafe))
+			html.body = string(renderHTML(s3, &markdown))
 
 			s3.saveHTML(html)
 			fmt.Println("HTML uploaded")
