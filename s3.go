@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -80,7 +82,7 @@ func (w *Wikidata) deleteHTML(titleHash string) error {
 }
 
 func (w *Wikidata) deleteMarkdown(titleHash string) error {
-	fmt.Println("Delete markdown")
+	log.Println("Delete markdown")
 	return w.delete("page/" + titleHash + "/index.md")
 }
 
@@ -107,7 +109,7 @@ func (w *Wikidata) setACL(titleHash string, public bool) error {
 		html.body = string(bluemonday.UGCPolicy().SanitizeBytes(unsafe))
 
 		w.saveHTML(*html)
-		fmt.Println("HTML uploaded")
+		log.Println("HTML uploaded")
 	} else {
 		w.delete("page/" + titleHash + "/index.html")
 	}
@@ -179,7 +181,7 @@ func (w *Wikidata) saveFile(page *pageData, file multipart.File, filename string
 }
 
 func (w *Wikidata) loadFile(titleHash, filename string) (string, []byte, error) {
-	fmt.Println("key:", "page/"+titleHash+"/index.md")
+	log.Println("key:", "page/"+titleHash+"/index.md")
 	paramsGet := &s3.GetObjectInput{
 		Bucket: aws.String(w.bucket),
 		Key:    aws.String("page/" + titleHash + "/file/" + filename),
@@ -236,7 +238,7 @@ func (w *Wikidata) saveUser(user userData) error {
 
 // GET
 func (w *Wikidata) loadUser(name string) (*userData, error) {
-	fmt.Println("key:", "user/"+name)
+	log.Println("key:", "user/"+name)
 	paramsGet := &s3.GetObjectInput{
 		Bucket: aws.String(w.bucket),
 		Key:    aws.String("user/" + name),
@@ -255,7 +257,7 @@ func (w *Wikidata) loadUser(name string) (*userData, error) {
 }
 
 func (w *Wikidata) loadMarkdown(titleHash string, versionID string) (*pageData, error) {
-	fmt.Println("key:", "page/"+titleHash+"/index.md")
+	log.Println("key:", "page/"+titleHash+"/index.md")
 	paramsGet := &s3.GetObjectInput{
 		Bucket: aws.String(w.bucket),
 		Key:    aws.String("page/" + titleHash + "/index.md"),
@@ -293,7 +295,7 @@ func (w *Wikidata) loadMarkdown(titleHash string, versionID string) (*pageData, 
 }
 
 func (w *Wikidata) loadMarkdownMetadata(titleHash string) (*pageData, error) {
-	fmt.Println("key:", "page/"+titleHash+"/index.md")
+	log.Println("key:", "page/"+titleHash+"/index.md")
 	paramsGet := &s3.HeadObjectInput{
 		Bucket: aws.String(w.bucket),
 		Key:    aws.String("page/" + titleHash + "/index.md"),

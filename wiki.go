@@ -2,11 +2,12 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"html/template"
 	"net/http"
 	"os"
 	"regexp"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/gin-gonic/contrib/sessions"
 	"github.com/gin-gonic/gin"
@@ -15,12 +16,13 @@ import (
 )
 
 func main() {
+
 	if os.Getenv("AWS_BUCKET_NAME") == "" ||
 		os.Getenv("AWS_BUCKET_REGION") == "" ||
 		os.Getenv("AWS_ACCESS_KEY_ID") == "" ||
 		os.Getenv("AWS_SECRET_ACCESS_KEY") == "" ||
 		os.Getenv("WIKI_SECRET") == "" {
-		fmt.Println("Error at environment variable")
+		log.Println("Error at environment variable")
 		os.Exit(1)
 	}
 
@@ -105,7 +107,7 @@ func getfilefunc(c *gin.Context) {
 
 	contentType, data, err := s3.loadFile(titleHash, filename)
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		return
 	}
 	c.Data(http.StatusOK, contentType, data)
@@ -128,7 +130,7 @@ func getfunc(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
 	titleHash := c.Param("titleHash")
 	version := c.Query("history")
-	fmt.Println(version)
+	log.Println(version)
 	var md *pageData
 	var err error
 	if version == "" {

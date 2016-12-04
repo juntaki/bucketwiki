@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/gin-gonic/contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/markbates/goth"
@@ -39,7 +40,7 @@ func authMiddleware() gin.HandlerFunc {
 		session := sessions.Default(c)
 		user := session.Get("user")
 		if user == nil {
-			fmt.Println("get failed")
+			log.Println("get failed")
 			c.Redirect(http.StatusFound, "/login")
 		}
 		c.Next()
@@ -50,7 +51,7 @@ func authCallback(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
 	user, err := gothic.CompleteUserAuth(c.Writer, c.Request)
 	if err != nil {
-		fmt.Println("User auth failed", err)
+		log.Println("User auth failed", err)
 		c.Redirect(http.StatusFound, "/500")
 		return
 	}
@@ -85,27 +86,27 @@ func postloginfunc(c *gin.Context) {
 
 	username, ok := c.GetPostForm("username")
 	if !ok || username == "" {
-		fmt.Println("Failed to get username")
+		log.Println("Failed to get username")
 		c.Redirect(http.StatusFound, "/login")
 		return
 	}
-	fmt.Println("username: ", username)
+	log.Println("username: ", username)
 
 	userData, err := s3.loadUser(username)
 	if err != nil {
-		fmt.Println("User is not found")
+		log.Println("User is not found")
 		c.Redirect(http.StatusFound, "/login")
 		return
 	}
-	fmt.Println("s3Data:   ", string(userData.Name))
+	log.Println("s3Data:   ", string(userData.Name))
 
 	response, ok := c.GetPostForm("password")
 	if !ok {
-		fmt.Println("Failed to get password")
+		log.Println("Failed to get password")
 		c.Redirect(http.StatusFound, "/login")
 		return
 	}
-	fmt.Println("response: ", response)
+	log.Println("response: ", response)
 
 	challange := session.Get("challange").(string)
 
@@ -116,7 +117,7 @@ func postloginfunc(c *gin.Context) {
 	// Use https proxy, if you want to prevent spoofing.
 	answer := fmt.Sprintf("%x", sha256.Sum256([]byte(string(userData.Secret)+challange)))
 
-	fmt.Println("answer:   ", answer)
+	log.Println("answer:   ", answer)
 
 	if answer == response {
 		session.Set("user", username)
@@ -136,7 +137,7 @@ func getloginfunc(c *gin.Context) {
 	session := sessions.Default(c)
 	session.Set("challange", challange)
 	session.Save()
-	fmt.Println("challange:", challange)
+	log.Println("challange:", challange)
 	c.HTML(http.StatusOK, "auth.html", gin.H{
 		"Challenge": challange,
 	})
@@ -161,30 +162,30 @@ func postsignupfunc(c *gin.Context) {
 	var ok bool
 	user.Name, ok = c.GetPostForm("username")
 	if !ok || user.Name == "" {
-		fmt.Println("Failed to get username")
+		log.Println("Failed to get username")
 		c.Redirect(http.StatusFound, "/signup")
 		return
 	}
 
 	_, err := s3.loadUser(user.Name)
 	if err == nil {
-		fmt.Println("User already exist: ", user.Name)
+		log.Println("User already exist: ", user.Name)
 		c.Redirect(http.StatusFound, "/signup")
 		return
 	}
 
-	fmt.Println("signup: ", user.Name)
+	log.Println("signup: ", user.Name)
 
 	user.Secret, ok = c.GetPostForm("password")
 	if !ok {
-		fmt.Println("Failed to get password")
+		log.Println("Failed to get password")
 		c.Redirect(http.StatusFound, "/signup")
 		return
 	}
 
 	err = s3.saveUser(user)
 	if err != nil {
-		fmt.Println("saveUser failed", err)
+		log.Println("saveUser failed", err)
 		c.Redirect(http.StatusFound, "/500")
 		return
 	}
