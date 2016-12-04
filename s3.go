@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/juntaki/transparent"
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/russross/blackfriday"
 )
@@ -25,6 +26,7 @@ type Wikidata struct {
 	bucket     string
 	region     string
 	wikiSecret string
+	pageCache  transparent.Layer
 }
 
 type pageData struct {
@@ -73,12 +75,13 @@ func (w *Wikidata) loadDocumentID(titleHash string) (string, error) {
 	return *r["ID"], nil
 }
 
-func (w *Wikidata) deleteHTML(titleHash string) {
-	w.delete("page/" + titleHash + "/index.html")
+func (w *Wikidata) deleteHTML(titleHash string) error {
+	return w.delete("page/" + titleHash + "/index.html")
 }
 
-func (w *Wikidata) deleteMarkdown(titleHash string) {
-	w.delete("page/" + titleHash + "/index.md")
+func (w *Wikidata) deleteMarkdown(titleHash string) error {
+	fmt.Println("Delete markdown")
+	return w.delete("page/" + titleHash + "/index.md")
 }
 
 func (w *Wikidata) checkPublic(titleHash string) bool {
@@ -190,7 +193,7 @@ func (w *Wikidata) loadFile(titleHash, filename string) (string, []byte, error) 
 	return *respGet.ContentType, body, nil
 }
 
-func (w *Wikidata) saveMarkdown(page pageData) error {
+func (w *Wikidata) saveMarkdown(page *pageData) error {
 	params := &s3.PutObjectInput{
 		Bucket:      aws.String(w.bucket),
 		Key:         aws.String("page/" + page.titleHash + "/index.md"),
@@ -402,5 +405,7 @@ func (w *Wikidata) connect() error {
 	}
 	w.svc = s3.New(sess, &aws.Config{Region: aws.String(w.region)})
 	w.wikiSecret = os.Getenv("WIKI_SECRET")
+
+	w.initializeCache()
 	return nil
 }

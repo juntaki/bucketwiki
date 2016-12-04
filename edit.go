@@ -13,7 +13,7 @@ func editfunc(c *gin.Context) {
 	titleHash := c.Param("titleHash")
 	title := c.Query("title")
 	body := "# " + title + "\n"
-	markdown, err := s3.loadMarkdown(titleHash, "")
+	markdown, err := s3.loadMarkdownAsync(titleHash)
 	if err == nil {
 		body = markdown.body
 	}
@@ -55,7 +55,7 @@ func postfunc(c *gin.Context) {
 func deletefunc(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
 	titleHash := c.Param("titleHash")
-	s3.deleteMarkdown(titleHash)
+	s3.deleteMarkdownAsync(titleHash)
 	s3.deleteHTML(titleHash)
 	c.Redirect(http.StatusFound, "/")
 }
@@ -82,12 +82,7 @@ func putfunc(c *gin.Context) {
 	markdown.title = title
 	markdown.author = user.(string)
 	markdown.body, _ = c.GetPostForm("body")
-	err := s3.saveMarkdown(markdown)
-	if err != nil {
-		fmt.Println("save Markdown", err)
-		c.Redirect(http.StatusFound, "/500")
-		return
-	}
+	s3.saveMarkdownAsync(titleHash, &markdown)
 
 	c.Redirect(http.StatusFound, "/page/"+titleHash)
 

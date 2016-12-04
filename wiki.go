@@ -129,7 +129,13 @@ func getfunc(c *gin.Context) {
 	titleHash := c.Param("titleHash")
 	version := c.Query("history")
 	fmt.Println(version)
-	md, err := s3.loadMarkdown(titleHash, version)
+	var md *pageData
+	var err error
+	if version == "" {
+		md, err = s3.loadMarkdownAsync(titleHash)
+	} else {
+		md, err = s3.loadMarkdown(titleHash, version)
+	}
 	if err != nil {
 		// If no object found, title cannot get from metadata, so it must be passed via query.
 		if version == "" {
