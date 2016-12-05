@@ -105,12 +105,15 @@ func getfilefunc(c *gin.Context) {
 	titleHash := c.Param("titleHash")
 	filename := c.Param("filename")
 
-	contentType, data, err := s3.loadFile(titleHash, filename)
+	fileData, err := s3.loadFileAsync(fileDataKey{
+		filename:  filename,
+		titleHash: titleHash,
+	})
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	c.Data(http.StatusOK, contentType, data)
+	c.Data(http.StatusOK, fileData.contentType, fileData.filebyte)
 }
 
 func gethistory(c *gin.Context) {

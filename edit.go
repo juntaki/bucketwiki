@@ -28,10 +28,6 @@ func editfunc(c *gin.Context) {
 func uploadfunc(c *gin.Context) {
 	s3 := c.MustGet("S3").(*Wikidata)
 	titleHash := c.Param("titleHash")
-	page, err := s3.loadMarkdownMetadata(titleHash)
-	if err != nil {
-		log.Println(err)
-	}
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		log.Println(err)
@@ -39,7 +35,16 @@ func uploadfunc(c *gin.Context) {
 	filename := header.Filename
 	contentType := header.Header["Content-Type"][0]
 
-	s3.saveFile(page, file, filename, contentType)
+	key := &fileDataKey{
+		filename:  filename,
+		titleHash: titleHash,
+	}
+	fileData := &fileData{
+		fileDataKey: key,
+		contentType: contentType,
+		file:        file,
+	}
+	s3.saveFileAsync(*key, fileData)
 }
 
 func postfunc(c *gin.Context) {

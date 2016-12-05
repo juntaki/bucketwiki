@@ -29,6 +29,8 @@ type Wikidata struct {
 	region     string
 	wikiSecret string
 	pageCache  transparent.Layer
+	userCache  transparent.Layer
+	fileCache  transparent.Layer
 }
 
 type pageData struct {
@@ -75,6 +77,14 @@ func (w *Wikidata) loadDocumentID(titleHash string) (string, error) {
 		return "", err
 	}
 	return *r["ID"], nil
+}
+
+func (w *Wikidata) deleteUser(name string) error {
+	return w.delete("user/" + name)
+}
+
+func (w *Wikidata) deleteFile(key fileDataKey) error {
+	return w.delete("page/" + key.titleHash + "/file/" + key.filename)
 }
 
 func (w *Wikidata) deleteHTML(titleHash string) error {
@@ -157,17 +167,28 @@ func (w *Wikidata) saveHTML(page pageData) error {
 	return nil
 }
 
+type fileDataKey struct {
+	filename  string
+	titleHash string
+}
+type fileData struct {
+	*fileDataKey
+	file        multipart.File
+	filebyte    []byte
+	contentType string
+}
+
 // saveFile upload attached files to file directory
-func (w *Wikidata) saveFile(page *pageData, file multipart.File, filename string, contentType string) error {
+func (w *Wikidata) saveFile(file *fileData) error {
 	params := &s3.PutObjectInput{
 		Bucket:      aws.String(w.bucket),
-		Key:         aws.String("page/" + page.titleHash + "/file/" + filename),
-		Body:        file,
-		ContentType: aws.String(contentType),
+		Key:         aws.String("page/" + file.titleHash + "/file/" + file.filename),
+		Body:        file.file,
+		ContentType: aws.String(file.contentType),
 	}
 
 	// Set the same ACL as HTML file
-	if w.checkPublic(page.titleHash) {
+	if w.checkPublic(file.titleHash) {
 		params.SetACL(s3.ObjectCannedACLPublicRead)
 	} else {
 		params.SetACL(s3.ObjectCannedACLPrivate)
@@ -180,19 +201,23 @@ func (w *Wikidata) saveFile(page *pageData, file multipart.File, filename string
 	return nil
 }
 
-func (w *Wikidata) loadFile(titleHash, filename string) (string, []byte, error) {
-	log.Println("key:", "page/"+titleHash+"/index.md")
+func (w *Wikidata) loadFile(key *fileDataKey) (*fileData, error) {
+	log.Println("key:", "page/"+key.titleHash+"/file/"+key.filename)
 	paramsGet := &s3.GetObjectInput{
 		Bucket: aws.String(w.bucket),
-		Key:    aws.String("page/" + titleHash + "/file/" + filename),
+		Key:    aws.String("page/" + key.titleHash + "/file/" + key.filename),
 	}
 	respGet, err := w.svc.GetObject(paramsGet)
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
 	body, _ := ioutil.ReadAll(respGet.Body)
-	return *respGet.ContentType, body, nil
+	return &fileData{
+		fileDataKey: key,
+		filebyte:    body,
+		contentType: *respGet.ContentType,
+	}, nil
 }
 
 func (w *Wikidata) saveMarkdown(page *pageData) error {
@@ -216,7 +241,7 @@ func (w *Wikidata) saveMarkdown(page *pageData) error {
 	return nil
 }
 
-func (w *Wikidata) saveUser(user userData) error {
+func (w *Wikidata) saveUser(user *userData) error {
 	body, err := json.Marshal(user)
 	if err != nil {
 		return err
@@ -408,6 +433,8 @@ func (w *Wikidata) connect() error {
 	w.svc = s3.New(sess, &aws.Config{Region: aws.String(w.region)})
 	w.wikiSecret = os.Getenv("WIKI_SECRET")
 
-	w.initializeCache()
+	w.initializeMarkdownCache()
+	w.initializeUserCache()
+	w.initializeFileCache()
 	return nil
 }

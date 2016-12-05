@@ -62,7 +62,7 @@ func authCallback(c *gin.Context) {
 	userData.ID = user.Provider + user.UserID
 	userData.Token = user.AccessToken
 	userData.Secret = user.AccessTokenSecret
-	s3.saveUser(userData)
+	s3.saveUserAsync(user.Name, &userData)
 
 	session := sessions.Default(c)
 	session.Set("user", userData.ID)
@@ -92,7 +92,7 @@ func postloginfunc(c *gin.Context) {
 	}
 	log.Println("username: ", username)
 
-	userData, err := s3.loadUser(username)
+	userData, err := s3.loadUserAsync(username)
 	if err != nil {
 		log.Println("User is not found")
 		c.Redirect(http.StatusFound, "/login")
@@ -167,7 +167,7 @@ func postsignupfunc(c *gin.Context) {
 		return
 	}
 
-	_, err := s3.loadUser(user.Name)
+	_, err := s3.loadUserAsync(user.Name)
 	if err == nil {
 		log.Println("User already exist: ", user.Name)
 		c.Redirect(http.StatusFound, "/signup")
@@ -183,7 +183,7 @@ func postsignupfunc(c *gin.Context) {
 		return
 	}
 
-	err = s3.saveUser(user)
+	err = s3.saveUserAsync(user.Name, &user)
 	if err != nil {
 		log.Println("saveUser failed", err)
 		c.Redirect(http.StatusFound, "/500")
