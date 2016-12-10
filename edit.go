@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io/ioutil"
 	"net/http"
 
 	log "github.com/Sirupsen/logrus"
@@ -39,10 +40,11 @@ func uploadfunc(c *gin.Context) {
 		filename:  filename,
 		titleHash: titleHash,
 	}
+	body, _ := ioutil.ReadAll(file)
 	fileData := &fileData{
 		fileDataKey: key,
 		contentType: contentType,
-		file:        file,
+		filebyte:    body,
 	}
 	s3.saveFileAsync(*key, fileData)
 }

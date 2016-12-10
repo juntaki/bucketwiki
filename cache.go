@@ -20,7 +20,7 @@ func (w *Wikidata) initializeMarkdownCache() error {
 
 	addfunc := func(key interface{}, value interface{}) (err error) {
 		pageData, _ := value.(*pageData)
-		log.Println("Set source", pageData)
+		log.Println("Set source", key)
 		err = w.saveMarkdown(pageData)
 		return err
 	}
@@ -77,7 +77,7 @@ func (w *Wikidata) initializeUserCache() error {
 
 	addfunc := func(key interface{}, value interface{}) (err error) {
 		userData, _ := value.(*userData)
-		log.Println("Set source", userData)
+		log.Println("Set source", key)
 		err = w.saveUser(userData)
 		return err
 	}
@@ -134,7 +134,7 @@ func (w *Wikidata) initializeFileCache() error {
 
 	addfunc := func(key interface{}, value interface{}) (err error) {
 		fileData, _ := value.(*fileData)
-		log.Println("Set source", fileData)
+		log.Println("Set source", key)
 		err = w.saveFile(fileData)
 		return err
 	}

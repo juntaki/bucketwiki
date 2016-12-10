@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"mime/multipart"
 	"os"
 	"strings"
 	"time"
@@ -173,7 +172,6 @@ type fileDataKey struct {
 }
 type fileData struct {
 	*fileDataKey
-	file        multipart.File
 	filebyte    []byte
 	contentType string
 }
@@ -183,7 +181,7 @@ func (w *Wikidata) saveFile(file *fileData) error {
 	params := &s3.PutObjectInput{
 		Bucket:      aws.String(w.bucket),
 		Key:         aws.String("page/" + file.titleHash + "/file/" + file.filename),
-		Body:        file.file,
+		Body:        bytes.NewReader(file.filebyte),
 		ContentType: aws.String(file.contentType),
 	}
 
@@ -430,7 +428,10 @@ func (w *Wikidata) connect() error {
 	if err != nil {
 		return err
 	}
-	w.svc = s3.New(sess, &aws.Config{Region: aws.String(w.region)})
+	w.svc = s3.New(sess, &aws.Config{
+		Region: aws.String(w.region),
+	})
+
 	w.wikiSecret = os.Getenv("WIKI_SECRET")
 
 	w.initializeMarkdownCache()
