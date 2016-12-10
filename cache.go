@@ -38,7 +38,7 @@ func (w *Wikidata) initializeMarkdownCache() error {
 	if err != nil {
 		return err
 	}
-	w.pageCache = transparent.NewLRUCache(10, 10)
+	w.pageCache, _ = transparent.NewLRUCache(10, 10)
 	transparent.Stack(w.pageCache, source)
 	return nil
 }
@@ -95,7 +95,7 @@ func (w *Wikidata) initializeUserCache() error {
 	if err != nil {
 		return err
 	}
-	w.userCache = transparent.NewLRUCache(10, 10)
+	w.userCache, _ = transparent.NewLRUCache(10, 10)
 	transparent.Stack(w.userCache, source)
 	return nil
 }
@@ -152,7 +152,7 @@ func (w *Wikidata) initializeFileCache() error {
 	if err != nil {
 		return err
 	}
-	w.fileCache = transparent.NewLRUCache(10, 10)
+	w.fileCache, _ = transparent.NewLRUCache(10, 10)
 	transparent.Stack(w.fileCache, source)
 	return nil
 }
