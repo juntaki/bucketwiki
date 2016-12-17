@@ -5,6 +5,8 @@ import (
 	"log"
 
 	"github.com/juntaki/transparent"
+	"github.com/juntaki/transparent/custom"
+	"github.com/juntaki/transparent/lru"
 )
 
 func (w *Wikidata) initializeMarkdownCache() error {
@@ -30,16 +32,20 @@ func (w *Wikidata) initializeMarkdownCache() error {
 		err = w.deleteMarkdown(titleHash)
 		return err
 	}
-	storage, err := transparent.NewCustomStorage(getfunc, addfunc, removefunc)
+	storage, err := custom.NewStorage(getfunc, addfunc, removefunc)
 	if err != nil {
 		return err
 	}
-	source, err := transparent.NewSource(storage)
+	source, err := transparent.NewLayerSource(storage)
 	if err != nil {
 		return err
 	}
-	w.pageCache, _ = transparent.NewLRUCache(10, 10)
-	transparent.Stack(w.pageCache, source)
+	cache, _ := lru.NewCache(10, 10)
+	w.pageCache = transparent.NewStack()
+	w.pageCache.Stack(source)
+	w.pageCache.Stack(cache)
+	w.pageCache.Start()
+
 	return nil
 }
 
@@ -87,16 +93,20 @@ func (w *Wikidata) initializeUserCache() error {
 		err = w.deleteUser(name)
 		return err
 	}
-	storage, err := transparent.NewCustomStorage(getfunc, addfunc, removefunc)
+	storage, err := custom.NewStorage(getfunc, addfunc, removefunc)
 	if err != nil {
 		return err
 	}
-	source, err := transparent.NewSource(storage)
+	source, err := transparent.NewLayerSource(storage)
 	if err != nil {
 		return err
 	}
-	w.userCache, _ = transparent.NewLRUCache(10, 10)
-	transparent.Stack(w.userCache, source)
+	cache, _ := lru.NewCache(10, 10)
+	w.userCache = transparent.NewStack()
+	w.userCache.Stack(source)
+	w.userCache.Stack(cache)
+	w.userCache.Start()
+
 	return nil
 }
 
@@ -144,16 +154,20 @@ func (w *Wikidata) initializeFileCache() error {
 		err = w.deleteFile(fileDataKey)
 		return err
 	}
-	storage, err := transparent.NewCustomStorage(getfunc, addfunc, removefunc)
+	storage, err := custom.NewStorage(getfunc, addfunc, removefunc)
 	if err != nil {
 		return err
 	}
-	source, err := transparent.NewSource(storage)
+	source, err := transparent.NewLayerSource(storage)
 	if err != nil {
 		return err
 	}
-	w.fileCache, _ = transparent.NewLRUCache(10, 10)
-	transparent.Stack(w.fileCache, source)
+	cache, _ := lru.NewCache(10, 10)
+	w.fileCache = transparent.NewStack()
+	w.fileCache.Stack(source)
+	w.fileCache.Stack(cache)
+	w.fileCache.Start()
+
 	return nil
 }
 

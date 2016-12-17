@@ -27,9 +27,9 @@ type Wikidata struct {
 	bucket     string
 	region     string
 	wikiSecret string
-	pageCache  transparent.Layer
-	userCache  transparent.Layer
-	fileCache  transparent.Layer
+	pageCache  *transparent.Stack
+	userCache  *transparent.Stack
+	fileCache  *transparent.Stack
 }
 
 type pageData struct {
