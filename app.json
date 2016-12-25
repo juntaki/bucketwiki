@@ -1,0 +1,38 @@
+{
+    "name": "Bucket Wiki",
+    "description": "Amazon S3 backed wiki",
+    "keywords": [
+        "Wiki",
+        "golang"
+    ],
+    "website": "https://bucketwiki.herokuapp.com",
+    "repository": "https://github.com/juntaki/bucketwiki",
+    "success_url": "/",
+    "env": {
+        "AWS_BUCKET_NAME": {
+            "description": "Target AWS bucket name."
+        },
+        "AWS_BUCKET_REGION": {
+            "description": "Target AWS region."
+        },
+        "AWS_ACCESS_KEY_ID": {
+            "description": "AWS access key."
+        },
+        "AWS_SECRET_ACCESS_KEY": {
+            "description": "AWS secret access key."
+        },
+        "TWITTER_KEY": {
+            "description": "Twitter API access key for authentication."
+        },
+        "TWITTER_SECRET": {
+            "description": "Twitter API secret access key for authentication."
+        },
+        "URL": {
+            "description": "Callback URL for twitter authentication."
+        },
+        "WIKI_SECRET": {
+            "description": "A secret key for wiki",
+            "generator": "secret"
+        }
+    }
+}
