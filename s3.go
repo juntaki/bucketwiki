@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/juntaki/transparent"
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/russross/blackfriday"
@@ -23,7 +24,7 @@ import (
 
 // Wikidata is storing data in S3
 type Wikidata struct {
-	svc        *s3.S3
+	svc        s3iface.S3API
 	bucket     string
 	region     string
 	wikiSecret string
@@ -117,7 +118,7 @@ func (w *Wikidata) setACL(titleHash string, public bool) error {
 		unsafe := blackfriday.MarkdownCommon([]byte(markdown.body))
 		html.body = string(bluemonday.UGCPolicy().SanitizeBytes(unsafe))
 
-		w.saveHTML(*html)
+		w.saveHTML(html)
 		log.Println("HTML uploaded")
 	} else {
 		w.delete("page/" + titleHash + "/index.html")
@@ -150,7 +151,7 @@ func (w *Wikidata) setACL(titleHash string, public bool) error {
 
 // PUT request
 // saveHTML upload compiled HTML docment for publicURL
-func (w *Wikidata) saveHTML(page pageData) error {
+func (w *Wikidata) saveHTML(page *pageData) error {
 	params := &s3.PutObjectInput{
 		Bucket:      aws.String(w.bucket),
 		Key:         aws.String("page/" + page.titleHash + "/index.html"),
@@ -171,7 +172,7 @@ type fileDataKey struct {
 	titleHash string
 }
 type fileData struct {
-	*fileDataKey
+	fileDataKey
 	filebyte    []byte
 	contentType string
 }
@@ -199,7 +200,7 @@ func (w *Wikidata) saveFile(file *fileData) error {
 	return nil
 }
 
-func (w *Wikidata) loadFile(key *fileDataKey) (*fileData, error) {
+func (w *Wikidata) loadFile(key fileDataKey) (*fileData, error) {
 	log.Println("key:", "page/"+key.titleHash+"/file/"+key.filename)
 	paramsGet := &s3.GetObjectInput{
 		Bucket: aws.String(w.bucket),

@@ -135,7 +135,7 @@ func (w *Wikidata) initializeFileCache() error {
 	getfunc := func(key interface{}) (interface{}, error) {
 		fileDataKey, _ := key.(fileDataKey)
 		log.Println("Get from source", fileDataKey)
-		file, err := w.loadFile(&fileDataKey)
+		file, err := w.loadFile(fileDataKey)
 		if err != nil {
 			return nil, err
 		}

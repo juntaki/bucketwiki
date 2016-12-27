@@ -36,7 +36,7 @@ func uploadfunc(c *gin.Context) {
 	filename := header.Filename
 	contentType := header.Header["Content-Type"][0]
 
-	key := &fileDataKey{
+	key := fileDataKey{
 		filename:  filename,
 		titleHash: titleHash,
 	}
@@ -46,7 +46,7 @@ func uploadfunc(c *gin.Context) {
 		contentType: contentType,
 		filebyte:    body,
 	}
-	s3.saveFileAsync(*key, fileData)
+	s3.saveFileAsync(key, fileData)
 }
 
 func postfunc(c *gin.Context) {
@@ -100,7 +100,7 @@ func putfunc(c *gin.Context) {
 			html := markdown
 			html.body = string(renderHTML(s3, &markdown))
 
-			s3.saveHTML(html)
+			s3.saveHTML(&html)
 			log.Println("HTML uploaded")
 		}(s3, markdown)
 	}
