@@ -226,7 +226,7 @@ func (w *Wikidata) saveMarkdown(page *pageData) error {
 		Body:        strings.NewReader(page.body),
 		ContentType: aws.String("text/x-markdown"),
 		Metadata: map[string]*string{
-			"Id":     aws.String(page.id),
+			"ID":     aws.String(page.id),
 			"Author": aws.String(page.author),
 			"Title":  aws.String(base64.StdEncoding.EncodeToString([]byte(page.title))),
 		},
@@ -309,8 +309,8 @@ func (w *Wikidata) loadMarkdown(titleHash string, versionID string) (*pageData, 
 		}
 		page.title = string(title)
 	}
-	if respGet.Metadata["Id"] != nil {
-		page.id = *respGet.Metadata["Id"]
+	if respGet.Metadata["ID"] != nil {
+		page.id = *respGet.Metadata["ID"]
 	}
 	if respGet.Metadata["Author"] != nil {
 		page.author = *respGet.Metadata["Author"]

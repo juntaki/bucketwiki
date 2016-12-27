@@ -30,12 +30,12 @@ func (m *mockS3) GetObject(i *s3.GetObjectInput) (*s3.GetObjectOutput, error) {
 		case "index.md":
 			contentType = "text/x-markdown"
 			meta["Title"] = aws.String(base64.StdEncoding.EncodeToString([]byte("testTitle")))
-			meta["Id"] = aws.String("testID")
+			meta["ID"] = aws.String("testID")
 			meta["Author"] = aws.String("testauthor")
 		case "index.html":
 			contentType = "text/html"
 			meta["Title"] = aws.String(base64.StdEncoding.EncodeToString([]byte("testTitle")))
-			meta["Id"] = aws.String("testID")
+			meta["ID"] = aws.String("testID")
 			meta["Author"] = aws.String("testauthor")
 		default:
 			contentType = "image/jpeg"
@@ -58,9 +58,12 @@ func (m *mockS3) GetObject(i *s3.GetObjectInput) (*s3.GetObjectOutput, error) {
 
 func (m *mockS3) HeadObject(*s3.HeadObjectInput) (*s3.HeadObjectOutput, error) {
 	meta := map[string]*string{}
-	meta["Id"] = aws.String("testID")
+	meta["Title"] = aws.String(base64.StdEncoding.EncodeToString([]byte("testTitle")))
+	meta["ID"] = aws.String("testID")
+	meta["Author"] = aws.String("testauthor")
 	return &s3.HeadObjectOutput{
-		Metadata: meta,
+		Metadata:     meta,
+		LastModified: aws.Time(time.Now()),
 	}, nil
 }
 
@@ -80,6 +83,10 @@ func (m *mockS3) DeleteObject(i *s3.DeleteObjectInput) (*s3.DeleteObjectOutput, 
 	return &s3.DeleteObjectOutput{}, nil
 }
 
+func (m *mockS3) ListObjectsV2(*s3.ListObjectsV2Input) (*s3.ListObjectsV2Output, error) {
+	return &s3.ListObjectsV2Output{}, nil
+}
+
 var wikidata *Wikidata
 
 func init() {
@@ -88,6 +95,21 @@ func init() {
 		bucket:     "testbucket",
 		region:     "testregion",
 		wikiSecret: "testSecret",
+	}
+}
+
+func TestInitializeCache(t *testing.T) {
+	err := wikidata.initializeMarkdownCache()
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = wikidata.initializeUserCache()
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = wikidata.initializeFileCache()
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -114,8 +136,50 @@ func TestLoadMarkdown(t *testing.T) {
 	}
 }
 
+func TestLoadMarkdownAsync(t *testing.T) {
+	page, err := wikidata.loadMarkdownAsync("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := &pageData{
+		titleHash: "test",
+		title:     "testTitle",
+		author:    "testauthor",
+		body:      "test",
+		id:        "testID",
+	}
+
+	if page.title != expected.title ||
+		page.titleHash != expected.titleHash ||
+		page.author != expected.author ||
+		page.body != expected.body ||
+		page.id != expected.id {
+		pp.Print(page)
+		t.Fail()
+	}
+}
+
 func TestLoadUser(t *testing.T) {
 	user, err := wikidata.loadUser("testUser")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := &userData{
+		Name:             "user",
+		ID:               "userID",
+		AuthenticateType: "",
+	}
+
+	if user.Name != expected.Name ||
+		user.ID != expected.ID {
+		pp.Print(user)
+		t.Fail()
+	}
+}
+
+func TestLoadUserAsync(t *testing.T) {
+	user, err := wikidata.loadUserAsync("testUser")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,6 +225,34 @@ func TestLoadFile(t *testing.T) {
 	}
 }
 
+func TestLoadFileAsync(t *testing.T) {
+	fkey := fileDataKey{
+		filename:  "test",
+		titleHash: "test",
+	}
+	file, err := wikidata.loadFileAsync(fkey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := &fileData{
+		fileDataKey: fileDataKey{
+			filename:  "test",
+			titleHash: "test",
+		},
+		filebyte: []uint8{
+			0x74, 0x65, 0x73, 0x74,
+		},
+		contentType: "image/jpeg",
+	}
+
+	if file.filename != expected.filename ||
+		len(file.filebyte) != len(expected.filebyte) {
+		pp.Print(file)
+		t.Fail()
+	}
+}
+
 func TestSaveFile(t *testing.T) {
 	file := &fileData{
 		fileDataKey: fileDataKey{
@@ -174,6 +266,28 @@ func TestSaveFile(t *testing.T) {
 	}
 
 	err := wikidata.saveFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSaveFileAsync(t *testing.T) {
+	key := fileDataKey{
+		filename:  "test",
+		titleHash: "test",
+	}
+	file := &fileData{
+		fileDataKey: fileDataKey{
+			filename:  "test",
+			titleHash: "test",
+		},
+		filebyte: []uint8{
+			0x74, 0x65, 0x73, 0x74,
+		},
+		contentType: "image/jpeg",
+	}
+
+	err := wikidata.saveFileAsync(key, file)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,6 +321,20 @@ func TestSaveMarkdown(t *testing.T) {
 	}
 }
 
+func TestSaveMarkdownAsync(t *testing.T) {
+	page := &pageData{
+		titleHash: "test",
+		title:     "testTitle",
+		author:    "testauthor",
+		body:      "test",
+		id:        "testID",
+	}
+	err := wikidata.saveMarkdownAsync("test", page)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestSaveUser(t *testing.T) {
 	user := &userData{
 		Name:             "user",
@@ -216,6 +344,56 @@ func TestSaveUser(t *testing.T) {
 	err := wikidata.saveUser(user)
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestSaveUserAsync(t *testing.T) {
+	user := &userData{
+		Name:             "user",
+		ID:               "userID",
+		AuthenticateType: "",
+	}
+	err := wikidata.saveUserAsync("user", user)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSetACL(t *testing.T) {
+	err := wikidata.setACL("test", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = wikidata.setACL("test", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLoadMarkdownMetadata(t *testing.T) {
+	_, err := wikidata.loadMarkdownMetadata("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMisc(t *testing.T) {
+	hash := wikidata.titleHash("test")
+	if hash != "0f1b46debeb926a490284e00b1c46601e227bb58a57e1e8e6afe989e9a383cbf" {
+		t.Fatal(hash)
+	}
+
+	id, err := wikidata.loadDocumentID("test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != "testID" {
+		t.Fatal(id)
+	}
+
+	url := wikidata.publicURL("test")
+	if url != "http://testbucket.s3-website-testregion.amazonaws.com/page/test" {
+		t.Fatal(url)
 	}
 }
 
