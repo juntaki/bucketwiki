@@ -9,7 +9,7 @@ import (
 	"github.com/juntaki/transparent/lru"
 )
 
-func (w *Wikidata) initializeMarkdownCache() error {
+func (w *Wikidata) initializeMarkdownCache() (err error) {
 	getfunc := func(key interface{}) (interface{}, error) {
 		titleHash, _ := key.(string)
 		log.Println("Get from source", titleHash)
@@ -61,16 +61,16 @@ func (w *Wikidata) loadMarkdownAsync(titleHash string) (*pageData, error) {
 	return pagedata, nil
 }
 
-func (w *Wikidata) saveMarkdownAsync(titleHash string, pageData *pageData) error {
+func (w *Wikidata) saveMarkdownAsync(titleHash string, pageData *pageData) (err error) {
 	return w.pageCache.Set(titleHash, pageData)
 }
 
-func (w *Wikidata) deleteMarkdownAsync(titleHash string) error {
+func (w *Wikidata) deleteMarkdownAsync(titleHash string) (err error) {
 	return w.pageCache.Remove(titleHash)
 }
 
 // for UserData
-func (w *Wikidata) initializeUserCache() error {
+func (w *Wikidata) initializeUserCache() (err error) {
 	getfunc := func(key interface{}) (interface{}, error) {
 		name, _ := key.(string)
 		log.Println("Get from source", name)
@@ -122,16 +122,16 @@ func (w *Wikidata) loadUserAsync(name string) (*userData, error) {
 	return userdata, nil
 }
 
-func (w *Wikidata) saveUserAsync(name string, userData *userData) error {
+func (w *Wikidata) saveUserAsync(name string, userData *userData) (err error) {
 	return w.userCache.Set(name, userData)
 }
 
-func (w *Wikidata) deleteUserAsync(name string) error {
+func (w *Wikidata) deleteUserAsync(name string) (err error) {
 	return w.userCache.Remove(name)
 }
 
 // for File
-func (w *Wikidata) initializeFileCache() error {
+func (w *Wikidata) initializeFileCache() (err error) {
 	getfunc := func(key interface{}) (interface{}, error) {
 		fileDataKey, _ := key.(fileDataKey)
 		log.Println("Get from source", fileDataKey)
@@ -183,10 +183,10 @@ func (w *Wikidata) loadFileAsync(key fileDataKey) (*fileData, error) {
 	return filedata, nil
 }
 
-func (w *Wikidata) saveFileAsync(key fileDataKey, fileData *fileData) error {
+func (w *Wikidata) saveFileAsync(key fileDataKey, fileData *fileData) (err error) {
 	return w.fileCache.Set(key, fileData)
 }
 
-func (w *Wikidata) deleteFileAsync(key fileDataKey) error {
+func (w *Wikidata) deleteFileAsync(key fileDataKey) (err error) {
 	return w.fileCache.Remove(key)
 }
