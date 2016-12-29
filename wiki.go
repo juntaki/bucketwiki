@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"html/template"
 	"io"
 	"net/http"
@@ -37,7 +38,11 @@ func main() {
 		bucket: os.Getenv("AWS_BUCKET_NAME"),
 		region: os.Getenv("AWS_BUCKET_REGION"),
 	}
-	s3.connect()
+	err := s3.connect()
+	if err != nil {
+		log.Println(err)
+		os.Exit(1)
+	}
 
 	e := echo.New()
 	e.Debug = true
@@ -47,14 +52,14 @@ func main() {
 	e.Renderer = t
 
 	e.Use(s3Middleware(&s3))
-	e.GET("/login", getloginfunc)
-	e.POST("/login", postloginfunc)
-	e.GET("/signup", getsignupfunc)
-	e.POST("/signup", postsignupfunc)
-	e.GET("/logout", getlogoutfunc)
+	e.GET("/login", loginPageHandler)
+	e.POST("/login", loginHandler)
+	e.GET("/signup", signupPageHandler)
+	e.POST("/signup", signupHandler)
+	e.GET("/logout", logoutHandler)
 
-	e.GET("/auth/callback", authCallback)
-	e.GET("/auth", authenticate)
+	e.GET("/auth/callback", authCallbackHandler)
+	e.GET("/auth", authHandler)
 	e.File("/500", "style/500.html")
 	e.File("/404", "style/404.html")
 	e.File("/layout.css", "style/layout.css")
@@ -64,18 +69,17 @@ func main() {
 	auth.Use(authMiddleware())
 	auth.GET("/", func(c echo.Context) (err error) {
 		// For first access, title query should be passed.
-		c.Redirect(http.StatusFound, "/page/"+s3.titleHash("Home")+"?title=Home")
-		return nil
+		return c.Redirect(http.StatusFound, "/page/"+s3.titleHash("Home")+"?title=Home")
 	})
-	auth.POST("/page/:titleHash/upload", uploadfunc)
-	auth.GET("/page/:titleHash/edit", editfunc)
-	auth.GET("/page/:titleHash/history", gethistory)
-	auth.GET("/page/:titleHash/file/:filename", getfilefunc)
-	auth.GET("/page/:titleHash", getfunc)
-	auth.POST("/page/:titleHash", postfunc)
-	auth.POST("/page/:titleHash/acl", aclfunc)
-	auth.PUT("/page/:titleHash", putfunc)
-	auth.DELETE("/page/:titleHash", deletefunc)
+	auth.POST("/page/:titleHash/upload", uploadHandler)
+	auth.GET("/page/:titleHash/edit", editorHandler)
+	auth.GET("/page/:titleHash/history", historyPageHandler)
+	auth.GET("/page/:titleHash/file/:filename", fileHandler)
+	auth.GET("/page/:titleHash", pageHandler)
+	auth.POST("/page/:titleHash", postPageHandler)
+	auth.POST("/page/:titleHash/acl", aclHandler)
+	auth.PUT("/page/:titleHash", putPageHandler)
+	auth.DELETE("/page/:titleHash", deletePageHandler)
 
 	port := ":" + os.Getenv("PORT")
 	if port == ":" {
@@ -93,25 +97,29 @@ func s3Middleware(s3 *Wikidata) echo.MiddlewareFunc {
 	}
 }
 
-func aclfunc(c echo.Context) (err error) {
+func aclHandler(c echo.Context) (err error) {
 	s3 := c.Get("S3").(*Wikidata)
 	titleHash := c.Param("titleHash")
 	acl := c.FormValue("acl")
 	switch acl {
 	case "public":
-		s3.setACL(titleHash, true)
+		err = s3.setACL(titleHash, true)
 	case "private":
-		s3.setACL(titleHash, false)
+		err = s3.setACL(titleHash, false)
+	default:
+		err = errors.New("unknown acl")
 	}
-	c.Redirect(http.StatusFound, "/page/"+titleHash)
-	return nil
+	if err != nil {
+		return err
+	}
+	return c.Redirect(http.StatusFound, "/page/"+titleHash)
 }
 
 type breadcrumb struct {
 	List []([]string) `json:"list"`
 }
 
-func getfilefunc(c echo.Context) (err error) {
+func fileHandler(c echo.Context) (err error) {
 	s3 := c.Get("S3").(*Wikidata)
 	titleHash := c.Param("titleHash")
 	filename := c.Param("filename")
@@ -124,25 +132,23 @@ func getfilefunc(c echo.Context) (err error) {
 		log.Println(err)
 		return nil
 	}
-	c.Blob(http.StatusOK, fileData.contentType, fileData.filebyte)
-	return nil
+	return c.Blob(http.StatusOK, fileData.contentType, fileData.filebyte)
 }
 
-func gethistory(c echo.Context) (err error) {
+func historyPageHandler(c echo.Context) (err error) {
 	s3 := c.Get("S3").(*Wikidata)
 	titleHash := c.Param("titleHash")
 	title := c.QueryParam("title")
 
 	history, _ := s3.listhistory(titleHash)
-	c.Render(http.StatusOK, "history.html", map[string]interface{}{
+	return c.Render(http.StatusOK, "history.html", map[string]interface{}{
 		"Title":     title,
 		"TitleHash": titleHash,
 		"List":      history,
 	})
-	return nil
 }
 
-func getfunc(c echo.Context) (err error) {
+func pageHandler(c echo.Context) (err error) {
 	s3 := c.Get("S3").(*Wikidata)
 	titleHash := c.Param("titleHash")
 	version := c.QueryParam("history")
@@ -157,12 +163,9 @@ func getfunc(c echo.Context) (err error) {
 		// If no object found, title cannot get from metadata, so it must be passed via query.
 		if version == "" {
 			title := c.QueryParam("title")
-			c.Redirect(http.StatusFound, "/page/"+titleHash+"/edit?title="+title)
-			return nil
-		} else {
-			c.Redirect(http.StatusFound, "/404")
-			return nil
+			return c.Redirect(http.StatusFound, "/page/"+titleHash+"/edit?title="+title)
 		}
+		return c.Redirect(http.StatusFound, "/404")
 	}
 
 	html := renderHTML(s3, md)
@@ -209,7 +212,7 @@ func getfunc(c echo.Context) (err error) {
 	jsonOut, _ := json.Marshal(&u)
 	c.SetCookie(&http.Cookie{Name: "breadcrumb", Value: string(jsonOut)})
 
-	c.Render(http.StatusOK, "view.html", map[string]interface{}{
+	return c.Render(http.StatusOK, "view.html", map[string]interface{}{
 		"Title":        title,
 		"TitleHash":    titleHash,
 		"Body":         template.HTML(html),
@@ -219,8 +222,6 @@ func getfunc(c echo.Context) (err error) {
 		"LastModified": md.lastUpdate,
 		"Author":       md.author,
 	})
-
-	return nil
 }
 
 func renderHTML(s3 *Wikidata, md *pageData) []byte {
