@@ -11,10 +11,15 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/labstack/echo"
+	"github.com/labstack/echo/middleware"
 
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/russross/blackfriday"
 )
+
+type handler struct {
+	db *Wikidata
+}
 
 type Template struct {
 	templates *template.Template
@@ -34,7 +39,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	s3 := Wikidata{
+	s3 := &Wikidata{
 		bucket: os.Getenv("AWS_BUCKET_NAME"),
 		region: os.Getenv("AWS_BUCKET_REGION"),
 	}
@@ -51,15 +56,20 @@ func main() {
 	}
 	e.Renderer = t
 
-	e.Use(s3Middleware(&s3))
-	e.GET("/login", loginPageHandler)
-	e.POST("/login", loginHandler)
-	e.GET("/signup", signupPageHandler)
-	e.POST("/signup", signupHandler)
-	e.GET("/logout", logoutHandler)
+	h := handler{db: s3}
 
-	e.GET("/auth/callback", authCallbackHandler)
-	e.GET("/auth", authHandler)
+	e.Use(middleware.Logger())
+	e.GET("/err", func(c echo.Context) (err error) {
+		return errors.New("some error")
+	})
+	e.GET("/login", h.loginPageHandler)
+	e.POST("/login", h.loginHandler)
+	e.GET("/signup", h.signupPageHandler)
+	e.POST("/signup", h.signupHandler)
+	e.GET("/logout", h.logoutHandler)
+
+	e.GET("/auth/callback", h.authCallbackHandler)
+	e.GET("/auth", h.authHandler)
 	e.File("/500", "style/500.html")
 	e.File("/404", "style/404.html")
 	e.File("/layout.css", "style/layout.css")
@@ -71,15 +81,15 @@ func main() {
 		// For first access, title query should be passed.
 		return c.Redirect(http.StatusFound, "/page/"+s3.titleHash("Home")+"?title=Home")
 	})
-	auth.POST("/page/:titleHash/upload", uploadHandler)
-	auth.GET("/page/:titleHash/edit", editorHandler)
-	auth.GET("/page/:titleHash/history", historyPageHandler)
-	auth.GET("/page/:titleHash/file/:filename", fileHandler)
-	auth.GET("/page/:titleHash", pageHandler)
-	auth.POST("/page/:titleHash", postPageHandler)
-	auth.POST("/page/:titleHash/acl", aclHandler)
-	auth.PUT("/page/:titleHash", putPageHandler)
-	auth.DELETE("/page/:titleHash", deletePageHandler)
+	auth.POST("/page/:titleHash/upload", h.uploadHandler)
+	auth.GET("/page/:titleHash/edit", h.editorHandler)
+	auth.GET("/page/:titleHash/history", h.historyPageHandler)
+	auth.GET("/page/:titleHash/file/:filename", h.fileHandler)
+	auth.GET("/page/:titleHash", h.pageHandler)
+	auth.POST("/page/:titleHash", h.postPageHandler)
+	auth.POST("/page/:titleHash/acl", h.aclHandler)
+	auth.PUT("/page/:titleHash", h.putPageHandler)
+	auth.DELETE("/page/:titleHash", h.deletePageHandler)
 
 	port := ":" + os.Getenv("PORT")
 	if port == ":" {
@@ -88,26 +98,16 @@ func main() {
 	e.Logger.Fatal(e.Start(port))
 }
 
-func s3Middleware(s3 *Wikidata) echo.MiddlewareFunc {
-	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) (err error) {
-			c.Set("S3", s3)
-			return next(c)
-		}
-	}
-}
-
-func aclHandler(c echo.Context) (err error) {
-	s3 := c.Get("S3").(*Wikidata)
+func (h *handler) aclHandler(c echo.Context) (err error) {
 	titleHash := c.Param("titleHash")
 	acl := c.FormValue("acl")
 	switch acl {
 	case "public":
-		err = s3.setACL(titleHash, true)
+		err = h.db.setACL(titleHash, true)
 	case "private":
-		err = s3.setACL(titleHash, false)
+		err = h.db.setACL(titleHash, false)
 	default:
-		err = errors.New("unknown acl")
+		err = echo.NewHTTPError(http.StatusBadRequest, "unknown ACL")
 	}
 	if err != nil {
 		return err
@@ -119,12 +119,11 @@ type breadcrumb struct {
 	List []([]string) `json:"list"`
 }
 
-func fileHandler(c echo.Context) (err error) {
-	s3 := c.Get("S3").(*Wikidata)
+func (h *handler) fileHandler(c echo.Context) (err error) {
 	titleHash := c.Param("titleHash")
 	filename := c.Param("filename")
 
-	fileData, err := s3.loadFileAsync(fileDataKey{
+	fileData, err := h.db.loadFileAsync(fileDataKey{
 		filename:  filename,
 		titleHash: titleHash,
 	})
@@ -135,12 +134,11 @@ func fileHandler(c echo.Context) (err error) {
 	return c.Blob(http.StatusOK, fileData.contentType, fileData.filebyte)
 }
 
-func historyPageHandler(c echo.Context) (err error) {
-	s3 := c.Get("S3").(*Wikidata)
+func (h *handler) historyPageHandler(c echo.Context) (err error) {
 	titleHash := c.Param("titleHash")
 	title := c.QueryParam("title")
 
-	history, _ := s3.listhistory(titleHash)
+	history, _ := h.db.listhistory(titleHash)
 	return c.Render(http.StatusOK, "history.html", map[string]interface{}{
 		"Title":     title,
 		"TitleHash": titleHash,
@@ -148,16 +146,15 @@ func historyPageHandler(c echo.Context) (err error) {
 	})
 }
 
-func pageHandler(c echo.Context) (err error) {
-	s3 := c.Get("S3").(*Wikidata)
+func (h *handler) pageHandler(c echo.Context) (err error) {
 	titleHash := c.Param("titleHash")
 	version := c.QueryParam("history")
 	log.Println(version)
 	var md *pageData
 	if version == "" {
-		md, err = s3.loadMarkdownAsync(titleHash)
+		md, err = h.db.loadMarkdownAsync(titleHash)
 	} else {
-		md, err = s3.loadMarkdown(titleHash, version)
+		md, err = h.db.loadMarkdown(titleHash, version)
 	}
 	if err != nil {
 		// If no object found, title cannot get from metadata, so it must be passed via query.
@@ -168,18 +165,19 @@ func pageHandler(c echo.Context) (err error) {
 		return c.Redirect(http.StatusFound, "/404")
 	}
 
-	html := renderHTML(s3, md)
+	html := renderHTML(h.db, md)
 	title := md.title
 
-	public := s3.checkPublic(titleHash)
-	publicURL := s3.publicURL(titleHash)
+	public := h.db.checkPublic(titleHash)
+	publicURL := h.db.publicURL(titleHash)
 
 	cookie, err := c.Cookie("breadcrumb")
+	var jsonStr string
 	if err != nil {
-		return err
+		jsonStr = ""
+	} else {
+		jsonStr = cookie.Value
 	}
-	jsonStr := cookie.Value
-
 	var u breadcrumb
 	u.List = []([]string){}
 	if jsonStr != "" {

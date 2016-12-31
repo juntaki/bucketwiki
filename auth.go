@@ -46,8 +46,7 @@ func authMiddleware() echo.MiddlewareFunc {
 	}
 }
 
-func authCallbackHandler(c echo.Context) (err error) {
-	s3 := c.Get("S3").(*Wikidata)
+func (h *handler) authCallbackHandler(c echo.Context) (err error) {
 	user, err := gothic.CompleteUserAuth(c.Response().Writer, c.Request())
 	if err != nil {
 		log.Println("User auth failed", err)
@@ -60,7 +59,7 @@ func authCallbackHandler(c echo.Context) (err error) {
 	userData.ID = user.Provider + user.UserID
 	userData.Token = user.AccessToken
 	userData.Secret = user.AccessTokenSecret
-	err = s3.saveUserAsync(user.Name, &userData)
+	err = h.db.saveUserAsync(user.Name, &userData)
 	if err != nil {
 		return err
 	}
@@ -69,17 +68,19 @@ func authCallbackHandler(c echo.Context) (err error) {
 	return c.Redirect(http.StatusFound, "/")
 }
 
-func authHandler(c echo.Context) (err error) {
-	gothic.BeginAuthHandler(c.Response().Writer, c.Request())
+func (h *handler) authHandler(c echo.Context) (err error) {
+	url, err := gothic.GetAuthURL(c.Response().Writer, c.Request())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err)
+	}
+	c.Redirect(http.StatusTemporaryRedirect, url)
 	return nil
 }
 
-func loginHandler(c echo.Context) (err error) {
+func (h *handler) loginHandler(c echo.Context) (err error) {
 	// Forget last cookie first
 	c.SetCookie(&http.Cookie{Name: "user"})
 	c.SetCookie(&http.Cookie{Name: "breadcrumb"})
-
-	s3 := c.Get("S3").(*Wikidata)
 
 	username := c.FormValue("username")
 	if username == "" {
@@ -88,7 +89,7 @@ func loginHandler(c echo.Context) (err error) {
 	}
 	log.Println("username: ", username)
 
-	userData, err := s3.loadUserAsync(username)
+	userData, err := h.db.loadUserAsync(username)
 	if err != nil {
 		log.Println("User is not found")
 		return c.Redirect(http.StatusFound, "/login")
@@ -117,10 +118,11 @@ func loginHandler(c echo.Context) (err error) {
 		c.SetCookie(&http.Cookie{Name: "user", Value: username})
 		return c.Redirect(http.StatusFound, "/")
 	}
+	log.Println("bad answer")
 	return c.Redirect(http.StatusFound, "/login")
 }
 
-func loginPageHandler(c echo.Context) (err error) {
+func (h *handler) loginPageHandler(c echo.Context) (err error) {
 	challange, err := randomString()
 	if err != nil {
 		return nil
@@ -132,19 +134,17 @@ func loginPageHandler(c echo.Context) (err error) {
 	})
 }
 
-func logoutHandler(c echo.Context) (err error) {
+func (h *handler) logoutHandler(c echo.Context) (err error) {
 	c.SetCookie(&http.Cookie{Name: "user"})
 	c.SetCookie(&http.Cookie{Name: "breadcrumb"})
 	return c.Redirect(http.StatusFound, "/login")
 }
 
-func signupPageHandler(c echo.Context) (err error) {
+func (h *handler) signupPageHandler(c echo.Context) (err error) {
 	return c.Render(http.StatusOK, "signup.html", map[string]interface{}{})
 }
 
-func signupHandler(c echo.Context) (err error) {
-	s3 := c.Get("S3").(*Wikidata)
-
+func (h *handler) signupHandler(c echo.Context) (err error) {
 	var user userData
 	user.Name = c.FormValue("username")
 	if user.Name == "" {
@@ -152,7 +152,7 @@ func signupHandler(c echo.Context) (err error) {
 		return c.Redirect(http.StatusFound, "/signup")
 	}
 
-	_, err = s3.loadUserAsync(user.Name)
+	_, err = h.db.loadUserAsync(user.Name)
 	if err == nil {
 		log.Println("User already exist: ", user.Name)
 		return c.Redirect(http.StatusFound, "/signup")
@@ -162,7 +162,7 @@ func signupHandler(c echo.Context) (err error) {
 
 	user.Secret = c.FormValue("password")
 
-	err = s3.saveUserAsync(user.Name, &user)
+	err = h.db.saveUserAsync(user.Name, &user)
 	if err != nil {
 		log.Println("saveUser failed", err)
 		return c.Redirect(http.StatusFound, "/500")
