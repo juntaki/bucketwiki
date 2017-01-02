@@ -6,14 +6,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
-	"os"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/gin-gonic/contrib/sessions"
-	"github.com/gin-gonic/gin"
-	"github.com/markbates/goth"
+	"github.com/labstack/echo"
 	"github.com/markbates/goth/gothic"
-	"github.com/markbates/goth/providers/twitter"
+	"github.com/pkg/errors"
 )
 
 func randomString() (string, error) {
@@ -27,33 +24,58 @@ func randomString() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-func authMiddleware() gin.HandlerFunc {
-	goth.UseProviders(
-		twitter.New(
-			os.Getenv("TWITTER_KEY"),
-			os.Getenv("TWITTER_SECRET"),
-			os.Getenv("URL")+"/auth/callback?provider=twitter",
-		),
-	)
+func (h *handler) getSession(c echo.Context) (sess *sessionData, err error) {
+	sessionID, err := c.Cookie("sessionID")
+	if err != nil {
+		return nil, errors.Wrap(err, "cookie not found")
+	}
+	log.Println("sessionID", sessionID.Value)
+	sess = &sessionData{ID: sessionID.Value}
+	err = h.db.loadBare(sess)
+	if err != nil {
+		return nil, errors.Wrap(err, "loadBare failed")
+	}
+	return sess, nil
+}
 
-	return func(c *gin.Context) {
-		session := sessions.Default(c)
-		user := session.Get("user")
-		if user == nil {
-			log.Println("get failed")
-			c.Redirect(http.StatusFound, "/login")
+func (h *handler) setSession(c echo.Context, sess *sessionData) (err error) {
+	sess.ID, err = randomString()
+	if err != nil {
+		return err
+	}
+	log.Println("save session", sess.ID)
+	err = h.db.saveBare(sess)
+	if err != nil {
+		return err
+	}
+	c.SetCookie(&http.Cookie{Name: "sessionID", Value: sess.ID, Path: "/"})
+	return nil
+}
+
+func (h *handler) authMiddleware() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) (err error) {
+			log.Println("Auth middleware")
+			session, err := h.getSession(c)
+			if err != nil {
+				log.Println("get session failed", err)
+				return c.Redirect(http.StatusFound, "/login")
+			}
+			if session.Login == false {
+				log.Println("not login session")
+				return c.Redirect(http.StatusFound, "/login")
+			}
+			c.Set("session", session)
+			return next(c)
 		}
-		c.Next()
 	}
 }
 
-func authCallback(c *gin.Context) {
-	s3 := c.MustGet("S3").(*Wikidata)
-	user, err := gothic.CompleteUserAuth(c.Writer, c.Request)
+func (h *handler) authCallbackHandler(c echo.Context) (err error) {
+	user, err := gothic.CompleteUserAuth(c.Response().Writer, c.Request())
 	if err != nil {
 		log.Println("User auth failed", err)
-		c.Redirect(http.StatusFound, "/500")
-		return
+		return c.Redirect(http.StatusFound, "/500")
 	}
 
 	var userData userData
@@ -62,133 +84,135 @@ func authCallback(c *gin.Context) {
 	userData.ID = user.Provider + user.UserID
 	userData.Token = user.AccessToken
 	userData.Secret = user.AccessTokenSecret
-	s3.saveUserAsync(user.Name, &userData)
+	err = h.db.saveBare(&userData)
+	if err != nil {
+		return err
+	}
 
-	session := sessions.Default(c)
-	session.Set("user", userData.ID)
-	session.Save()
+	sess := &sessionData{
+		Login: true,
+	}
+	err = h.setSession(c, sess)
+	if err != nil {
+		return err
+	}
 
-	c.Redirect(http.StatusFound, "/")
+	return c.Redirect(http.StatusFound, "/")
 }
 
-func authenticate(c *gin.Context) {
-	gothic.BeginAuthHandler(c.Writer, c.Request)
+func (h *handler) authHandler(c echo.Context) (err error) {
+	url, err := gothic.GetAuthURL(c.Response().Writer, c.Request())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err)
+	}
+	c.Redirect(http.StatusTemporaryRedirect, url)
+	return nil
 }
 
-func postloginfunc(c *gin.Context) {
-	// Forget last cookie first
-	session := sessions.Default(c)
-	session.Delete("user")
-	session.Delete("breadcrumb")
-	session.Save()
-
-	s3 := c.MustGet("S3").(*Wikidata)
-
-	username, ok := c.GetPostForm("username")
-	if !ok || username == "" {
+func (h *handler) loginHandler(c echo.Context) (err error) {
+	username := c.FormValue("username")
+	if username == "" {
 		log.Println("Failed to get username")
-		c.Redirect(http.StatusFound, "/login")
-		return
+		return c.Redirect(http.StatusFound, "/login")
 	}
 	log.Println("username: ", username)
-
-	userData, err := s3.loadUserAsync(username)
+	userData := &userData{
+		Name: username,
+	}
+	err = h.db.loadBare(userData)
 	if err != nil {
-		log.Println("User is not found")
-		c.Redirect(http.StatusFound, "/login")
-		return
+		log.Println("User is not found", err)
+		return c.Redirect(http.StatusFound, "/login")
 	}
-	log.Println("s3Data:   ", string(userData.Name))
+	log.Println("userData.Name:", userData.Name)
 
-	response, ok := c.GetPostForm("password")
-	if !ok {
-		log.Println("Failed to get password")
-		c.Redirect(http.StatusFound, "/login")
-		return
-	}
+	response := c.FormValue("password")
 	log.Println("response: ", response)
 
-	challange := session.Get("challange").(string)
+	sess, err := h.getSession(c)
+	if err != nil {
+		return err
+	}
 
+	challange := sess.Challange
 	// Answer is SHA256(SHA256(password string) + challange string)
 	// SHA256(password) should be SHA256(password + salt), but it's too much.
 	// Wiki admin or sniffer cannot see raw password string on network and S3.
-	// Cookie itself may not safe, if network is http. (Is is encrypted?, but sniffer can see cookie.)
-	// Use https proxy, if you want to prevent spoofing.
 	answer := fmt.Sprintf("%x", sha256.Sum256([]byte(string(userData.Secret)+challange)))
 
 	log.Println("answer:   ", answer)
 
 	if answer == response {
-		session.Set("user", username)
-		session.Save()
-		c.Redirect(http.StatusFound, "/")
-		return
+		log.Println("good answer")
+		sess.Login = true
+		sess.User = username
+		err := h.setSession(c, sess)
+		if err != nil {
+			return err
+		}
+		return c.Redirect(http.StatusFound, "/")
 	}
-
-	c.Redirect(http.StatusFound, "/login")
+	log.Println("bad answer")
+	return c.Redirect(http.StatusFound, "/login")
 }
 
-func getloginfunc(c *gin.Context) {
+func (h *handler) loginPageHandler(c echo.Context) (err error) {
 	challange, err := randomString()
 	if err != nil {
-		return
+		return nil
 	}
-	session := sessions.Default(c)
-	session.Set("challange", challange)
-	session.Save()
+
+	sess := &sessionData{
+		Login:     false,
+		Challange: challange,
+	}
+	err = h.setSession(c, sess)
+	if err != nil {
+		return err
+	}
+
 	log.Println("challange:", challange)
-	c.HTML(http.StatusOK, "auth.html", gin.H{
+	return c.Render(http.StatusOK, "auth.html", map[string]interface{}{
 		"Challenge": challange,
 	})
 }
 
-func getlogoutfunc(c *gin.Context) {
-	session := sessions.Default(c)
-	session.Delete("user")
-	session.Delete("breadcrumb")
-	session.Save()
-	c.Redirect(http.StatusFound, "/login")
+func (h *handler) logoutHandler(c echo.Context) (err error) {
+	sess := c.Get("session").(*sessionData)
+	err = h.db.deleteBare(&sessionData{ID: sess.ID})
+	if err != nil {
+		return err
+	}
+	return c.Redirect(http.StatusFound, "/login")
 }
 
-func getsignupfunc(c *gin.Context) {
-	c.HTML(http.StatusOK, "signup.html", gin.H{})
+func (h *handler) signupPageHandler(c echo.Context) (err error) {
+	return c.Render(http.StatusOK, "signup.html", map[string]interface{}{})
 }
 
-func postsignupfunc(c *gin.Context) {
-	s3 := c.MustGet("S3").(*Wikidata)
-
+func (h *handler) signupHandler(c echo.Context) (err error) {
 	var user userData
-	var ok bool
-	user.Name, ok = c.GetPostForm("username")
-	if !ok || user.Name == "" {
+	user.Name = c.FormValue("username")
+	if user.Name == "" {
 		log.Println("Failed to get username")
-		c.Redirect(http.StatusFound, "/signup")
-		return
+		return c.Redirect(http.StatusFound, "/signup")
 	}
 
-	_, err := s3.loadUserAsync(user.Name)
+	err = h.db.loadBare(&user)
 	if err == nil {
 		log.Println("User already exist: ", user.Name)
-		c.Redirect(http.StatusFound, "/signup")
-		return
+		return c.Redirect(http.StatusFound, "/signup")
 	}
 
 	log.Println("signup: ", user.Name)
 
-	user.Secret, ok = c.GetPostForm("password")
-	if !ok {
-		log.Println("Failed to get password")
-		c.Redirect(http.StatusFound, "/signup")
-		return
-	}
+	user.Secret = c.FormValue("password")
 
-	err = s3.saveUserAsync(user.Name, &user)
+	err = h.db.saveBare(&user)
 	if err != nil {
 		log.Println("saveUser failed", err)
-		c.Redirect(http.StatusFound, "/500")
-		return
+		return c.Redirect(http.StatusFound, "/500")
 	}
 
-	c.Redirect(http.StatusFound, "/login")
+	return c.Redirect(http.StatusFound, "/login")
 }

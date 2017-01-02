@@ -2,21 +2,36 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"html/template"
+	"io"
 	"net/http"
 	"os"
 	"regexp"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/labstack/echo"
+	"github.com/labstack/echo/middleware"
+	"github.com/markbates/goth"
+	"github.com/markbates/goth/providers/twitter"
 
-	"github.com/gin-gonic/contrib/sessions"
-	"github.com/gin-gonic/gin"
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/russross/blackfriday"
 )
 
-func main() {
+type handler struct {
+	db *Wikidata
+}
 
+type Template struct {
+	templates *template.Template
+}
+
+func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Context) (err error) {
+	return t.templates.ExecuteTemplate(w, name, data)
+}
+
+func main() {
 	if os.Getenv("AWS_BUCKET_NAME") == "" ||
 		os.Getenv("AWS_BUCKET_REGION") == "" ||
 		os.Getenv("AWS_ACCESS_KEY_ID") == "" ||
@@ -26,149 +41,156 @@ func main() {
 		os.Exit(1)
 	}
 
-	s3 := Wikidata{
+	s3 := &Wikidata{
 		bucket: os.Getenv("AWS_BUCKET_NAME"),
 		region: os.Getenv("AWS_BUCKET_REGION"),
 	}
-	s3.connect()
-
-	router := gin.Default()
-	store := sessions.NewCookieStore([]byte(s3.wikiSecret))
-	router.Use(sessions.Sessions("mysession", store))
-	router.LoadHTMLGlob("style/*.html")
-
-	router.Use(s3Middleware(&s3))
-	router.GET("/login", getloginfunc)
-	router.POST("/login", postloginfunc)
-	router.GET("/signup", getsignupfunc)
-	router.POST("/signup", postsignupfunc)
-	router.GET("/logout", getlogoutfunc)
-
-	router.GET("/auth/callback", authCallback)
-	router.GET("/auth", authenticate)
-	router.StaticFile("/500", "style/500.html")
-	router.StaticFile("/404", "style/404.html")
-	router.StaticFile("/layout.css", "style/layout.css")
-	router.StaticFile("/favicon.ico", "style/favicon.ico")
-
-	auth := router.Group("/")
-	auth.Use(authMiddleware())
-	{
-		auth.GET("/", func(c *gin.Context) {
-			// For first access, title query should be passed.
-			c.Redirect(http.StatusFound, "/page/"+s3.titleHash("Home")+"?title=Home")
-		})
-		auth.POST("/page/:titleHash/upload", uploadfunc)
-		auth.GET("/page/:titleHash/edit", editfunc)
-		auth.GET("/page/:titleHash/history", gethistory)
-		auth.GET("/page/:titleHash/file/:filename", getfilefunc)
-		auth.GET("/page/:titleHash", getfunc)
-		auth.POST("/page/:titleHash", postfunc)
-		auth.POST("/page/:titleHash/acl", aclfunc)
-		auth.PUT("/page/:titleHash", putfunc)
-		auth.DELETE("/page/:titleHash", deletefunc)
+	err := s3.connect()
+	if err != nil {
+		log.Println(err)
+		os.Exit(1)
 	}
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	e := echo.New()
+	e.Debug = true
+	t := &Template{
+		templates: template.Must(template.ParseGlob("style/*.html")),
 	}
-	router.Run(":" + port)
+	e.Renderer = t
+
+	h := handler{db: s3}
+
+	goth.UseProviders(
+		twitter.New(
+			os.Getenv("TWITTER_KEY"),
+			os.Getenv("TWITTER_SECRET"),
+			os.Getenv("URL")+"/auth/callback?provider=twitter",
+		),
+	)
+
+	e.Use(middleware.Logger())
+	e.GET("/err", func(c echo.Context) (err error) {
+		return errors.New("some error")
+	})
+	e.GET("/login", h.loginPageHandler)
+	e.POST("/login", h.loginHandler)
+	e.GET("/signup", h.signupPageHandler)
+	e.POST("/signup", h.signupHandler)
+
+	e.GET("/auth/callback", h.authCallbackHandler)
+	e.GET("/auth", h.authHandler)
+	e.File("/500", "style/500.html")
+	e.File("/404", "style/404.html")
+	e.File("/layout.css", "style/layout.css")
+	e.File("/favicon.ico", "style/favicon.ico")
+
+	auth := e.Group("")
+	auth.Use(h.authMiddleware())
+	auth.GET("/", func(c echo.Context) (err error) {
+		// For first access, title query should be passed.
+		return c.Redirect(http.StatusFound, "/page/"+s3.titleHash("Home")+"?title=Home")
+	})
+	auth.GET("/logout", h.logoutHandler)
+	auth.POST("/page/:titleHash/upload", h.uploadHandler)
+	auth.GET("/page/:titleHash/edit", h.editorHandler)
+	auth.GET("/page/:titleHash/history", h.historyPageHandler)
+	auth.GET("/page/:titleHash/file/:filename", h.fileHandler)
+	auth.GET("/page/:titleHash", h.pageHandler)
+	auth.POST("/page/:titleHash", h.postPageHandler)
+	auth.POST("/page/:titleHash/acl", h.aclHandler)
+	auth.PUT("/page/:titleHash", h.putPageHandler)
+	auth.DELETE("/page/:titleHash", h.deletePageHandler)
+
+	port := ":" + os.Getenv("PORT")
+	if port == ":" {
+		port = ":8080"
+	}
+	e.Logger.Fatal(e.Start(port))
 }
 
-func s3Middleware(s3 *Wikidata) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Set("S3", s3)
-		c.Next()
-	}
-}
-
-func aclfunc(c *gin.Context) {
-	s3 := c.MustGet("S3").(*Wikidata)
+func (h *handler) aclHandler(c echo.Context) (err error) {
 	titleHash := c.Param("titleHash")
-	acl, _ := c.GetPostForm("acl")
+	acl := c.FormValue("acl")
 	switch acl {
 	case "public":
-		s3.setACL(titleHash, true)
+		err = h.db.setACL(titleHash, true)
 	case "private":
-		s3.setACL(titleHash, false)
+		err = h.db.setACL(titleHash, false)
+	default:
+		err = echo.NewHTTPError(http.StatusBadRequest, "unknown ACL")
 	}
-	c.Redirect(http.StatusFound, "/page/"+titleHash)
+	if err != nil {
+		return err
+	}
+	return c.Redirect(http.StatusFound, "/page/"+titleHash)
 }
 
 type breadcrumb struct {
 	List []([]string) `json:"list"`
 }
 
-func getfilefunc(c *gin.Context) {
-	s3 := c.MustGet("S3").(*Wikidata)
+func (h *handler) fileHandler(c echo.Context) (err error) {
 	titleHash := c.Param("titleHash")
 	filename := c.Param("filename")
 
-	fileData, err := s3.loadFileAsync(fileDataKey{
+	fileData := &fileData{
 		filename:  filename,
 		titleHash: titleHash,
-	})
+	}
+
+	err = h.db.loadBare(fileData)
 	if err != nil {
 		log.Println(err)
-		return
+		return nil
 	}
-	c.Data(http.StatusOK, fileData.contentType, fileData.filebyte)
+	return c.Blob(http.StatusOK, fileData.contentType, fileData.filebyte)
 }
 
-func gethistory(c *gin.Context) {
-	s3 := c.MustGet("S3").(*Wikidata)
+func (h *handler) historyPageHandler(c echo.Context) (err error) {
 	titleHash := c.Param("titleHash")
-	title := c.Query("title")
+	title := c.QueryParam("title")
 
-	history, _ := s3.listhistory(titleHash)
-	c.HTML(http.StatusOK, "history.html", gin.H{
+	history, _ := h.db.listhistory(titleHash)
+	return c.Render(http.StatusOK, "history.html", map[string]interface{}{
 		"Title":     title,
 		"TitleHash": titleHash,
 		"List":      history,
 	})
 }
 
-func getfunc(c *gin.Context) {
-	s3 := c.MustGet("S3").(*Wikidata)
+func (h *handler) pageHandler(c echo.Context) (err error) {
 	titleHash := c.Param("titleHash")
-	version := c.Query("history")
-	log.Println(version)
-	var md *pageData
-	var err error
-	if version == "" {
-		md, err = s3.loadMarkdownAsync(titleHash)
-	} else {
-		md, err = s3.loadMarkdown(titleHash, version)
+	versionId := c.QueryParam("history")
+
+	md := &pageData{
+		titleHash: titleHash,
+		versionId: versionId,
 	}
+
+	err = h.db.loadBare(md)
 	if err != nil {
 		// If no object found, title cannot get from metadata, so it must be passed via query.
-		if version == "" {
-			title := c.Query("title")
-			c.Redirect(http.StatusFound, "/page/"+titleHash+"/edit?title="+title)
-			return
-		} else {
-			c.Redirect(http.StatusFound, "/404")
-			return
+		if versionId == "" {
+			title := c.QueryParam("title")
+			return c.Redirect(http.StatusFound, "/page/"+titleHash+"/edit?title="+title)
 		}
+		return c.Redirect(http.StatusFound, "/404")
 	}
 
-	html := renderHTML(s3, md)
+	html := renderHTML(h.db, md)
 	title := md.title
 
-	public := s3.checkPublic(titleHash)
-	publicURL := s3.publicURL(titleHash)
+	public := h.db.checkPublic(titleHash)
+	publicURL := h.db.publicURL(titleHash)
 
-	session := sessions.Default(c)
-	jsonStr := session.Get("breadcrumb")
+	sess := c.Get("session").(*sessionData)
+	jsonStr := sess.BreadCrumb
 
 	var u breadcrumb
 	u.List = []([]string){}
-	if jsonStr != nil {
-		err = json.Unmarshal(jsonStr.([]byte), &u)
-		if err != nil {
-			u.List = []([]string){}
-		}
+	err = json.Unmarshal(jsonStr, &u)
+	if err != nil {
+		u.List = []([]string){}
 	}
 
 	var array []([]string)
@@ -191,11 +213,14 @@ func getfunc(c *gin.Context) {
 	if len(u.List) > maxSize {
 		u.List = u.List[1 : maxSize+1]
 	}
-	jsonOut, _ := json.Marshal(&u)
-	session.Set("breadcrumb", jsonOut)
-	session.Save()
+	sess.BreadCrumb, _ = json.Marshal(&u)
 
-	c.HTML(http.StatusOK, "view.html", gin.H{
+	err = h.setSession(c, sess)
+	if err != nil {
+		return err
+	}
+
+	return c.Render(http.StatusOK, "view.html", map[string]interface{}{
 		"Title":        title,
 		"TitleHash":    titleHash,
 		"Body":         template.HTML(html),

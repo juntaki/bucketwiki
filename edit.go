@@ -3,105 +3,121 @@ package main
 import (
 	"io/ioutil"
 	"net/http"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
-
-	"github.com/gin-gonic/contrib/sessions"
-	"github.com/gin-gonic/gin"
+	"github.com/labstack/echo"
 )
 
-func editfunc(c *gin.Context) {
-	s3 := c.MustGet("S3").(*Wikidata)
+func (h *handler) editorHandler(c echo.Context) (err error) {
 	titleHash := c.Param("titleHash")
-	title := c.Query("title")
+	title := c.QueryParam("title")
 	body := "# " + title + "\n"
-	markdown, err := s3.loadMarkdownAsync(titleHash)
-	if err == nil {
-		body = markdown.body
+
+	md := &pageData{
+		titleHash: titleHash,
 	}
-	c.HTML(http.StatusOK, "edit.html", gin.H{
+	err = h.db.loadBare(md)
+	if err == nil {
+		body = md.body
+	}
+	return c.Render(http.StatusOK, "edit.html", map[string]interface{}{
 		"Title":     title,
 		"TitleHash": titleHash,
 		"Body":      body,
 	})
 }
 
-func uploadfunc(c *gin.Context) {
-	s3 := c.MustGet("S3").(*Wikidata)
+func (h *handler) uploadHandler(c echo.Context) (err error) {
 	titleHash := c.Param("titleHash")
-	file, header, err := c.Request.FormFile("file")
+	header, err := c.FormFile("file")
 	if err != nil {
-		log.Println(err)
+		return echo.NewHTTPError(http.StatusBadRequest, err)
 	}
 	filename := header.Filename
 	contentType := header.Header["Content-Type"][0]
 
-	key := fileDataKey{
-		filename:  filename,
-		titleHash: titleHash,
+	file, err := header.Open()
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err)
 	}
+
 	body, _ := ioutil.ReadAll(file)
+
 	fileData := &fileData{
-		fileDataKey: key,
+		filename:    filename,
+		titleHash:   titleHash,
 		contentType: contentType,
 		filebyte:    body,
 	}
-	s3.saveFileAsync(key, fileData)
+	err = h.db.saveBare(fileData)
+	return echo.NewHTTPError(http.StatusInternalServerError, err)
 }
 
-func postfunc(c *gin.Context) {
-	method, _ := c.GetPostForm("_method")
+func (h *handler) postPageHandler(c echo.Context) (err error) {
+	method := c.FormValue("_method")
 	log.Println(method)
 	switch method {
 	case "put":
-		putfunc(c)
+		return h.putPageHandler(c)
 	case "delete":
-		deletefunc(c)
+		return h.deletePageHandler(c)
 	}
+	return nil
 }
 
-func deletefunc(c *gin.Context) {
-	s3 := c.MustGet("S3").(*Wikidata)
+func (h *handler) deletePageHandler(c echo.Context) (err error) {
 	titleHash := c.Param("titleHash")
-	s3.deleteMarkdownAsync(titleHash)
-	s3.deleteHTML(titleHash)
-	c.Redirect(http.StatusFound, "/")
+	md := &pageData{titleHash: titleHash}
+	html := &htmlData{titleHash: titleHash}
+
+	err = h.db.deleteBare(md)
+	if err != nil {
+		return err
+	}
+	err = h.db.deleteBare(html)
+	if err != nil {
+		return err
+	}
+	return c.Redirect(http.StatusFound, "/")
 }
 
-func putfunc(c *gin.Context) {
-	s3 := c.MustGet("S3").(*Wikidata)
+func (h *handler) putPageHandler(c echo.Context) (err error) {
 	titleHash := c.Param("titleHash")
-	title, _ := c.GetPostForm("title")
-	if titleHash != s3.titleHash(title) {
+	title := c.FormValue("title")
+	if titleHash != h.db.titleHash(title) {
 		log.Println("title not match")
 		log.Println("title:", title)
-		log.Println("generated:", s3.titleHash(title))
+		log.Println("generated:", h.db.titleHash(title))
 		log.Println("titleHash:", titleHash)
-		c.Redirect(http.StatusFound, "/500")
-		return
+		return c.Redirect(http.StatusFound, "/500")
 	}
 
-	session := sessions.Default(c)
-	user := session.Get("user")
+	sess := c.Get("session").(*sessionData)
+	user := sess.User
 
 	var markdown pageData
 
 	markdown.titleHash = titleHash
 	markdown.title = title
-	markdown.author = user.(string)
-	markdown.body, _ = c.GetPostForm("body")
-	s3.saveMarkdownAsync(titleHash, &markdown)
+	markdown.author = user
+	markdown.body = c.FormValue("body")
+	markdown.lastUpdate = time.Now()
 
-	c.Redirect(http.StatusFound, "/page/"+titleHash)
+	err = h.db.saveBare(&markdown)
+	if err != nil {
+		return err
+	}
 
 	// Async upload compiled HTML
-	if s3.checkPublic(markdown.titleHash) {
+	if h.db.checkPublic(markdown.titleHash) {
 		go func(s3 *Wikidata, markdown pageData) {
 			html := markdown
-			html.body = string(renderHTML(s3, &markdown))
+			html.body = string(renderHTML(h.db, &markdown))
 
-			s3.saveHTML(&html)
+			err = s3.saveBare(&html)
 			log.Println("HTML uploaded")
-		}(s3, markdown)
+		}(h.db, markdown)
 	}
+	return c.Redirect(http.StatusFound, "/page/"+titleHash)
 }
