@@ -166,7 +166,6 @@
 		},
 		{
 			"checksumSHA1": "DxYdsl28d+xvrM1Pf3z2bdwrnFg=",
-			"origin": "github.com/juntaki/bucketwiki/vendor/github.com/aws/aws-sdk-go/service/s3/s3iface",
 			"path": "github.com/aws/aws-sdk-go/service/s3/s3iface",
 			"revision": "5b60f2be581887b3688995b4c53f0f130710a18f",
 			"revisionTime": "2016-12-08T20:54:23Z"
@@ -182,6 +181,12 @@
 			"path": "github.com/boj/redistore",
 			"revision": "fc113767cd6b051980f260d6dbe84b2740c46ab0",
 			"revisionTime": "2016-01-28T11:33:10Z"
+		},
+		{
+			"checksumSHA1": "2Fy1Y6Z3lRRX1891WF/+HT4XS2I=",
+			"path": "github.com/dgrijalva/jwt-go",
+			"revision": "9ed569b5d1ac936e6494082958d63a6aa4fff99a",
+			"revisionTime": "2016-11-01T19:39:35Z"
 		},
 		{
 			"checksumSHA1": "2UmMbNHc8FBr98mJFN1k8ISOIHk=",
@@ -280,11 +285,58 @@
 			"revisionTime": "2016-12-22T03:42:45Z"
 		},
 		{
+			"checksumSHA1": "sYoW+cD/rWha6WT3hskKSSotDQ0=",
+			"path": "github.com/juntaki/transparent/s3",
+			"revision": "ef8081983b7117a69f43e69aaf25f51592f244ab",
+			"revisionTime": "2017-01-02T15:16:37Z"
+		},
+		{
+			"checksumSHA1": "IfYmJdDDTKk3iFiHJhZCXByZtxE=",
+			"path": "github.com/juntaki/transparent/simple",
+			"revision": "ef8081983b7117a69f43e69aaf25f51592f244ab",
+			"revisionTime": "2017-01-02T15:16:37Z"
+		},
+		{
 			"checksumSHA1": "KSUzHdRfzlo1JNuxY/DKWUlEt7Y=",
-			"origin": "github.com/juntaki/bucketwiki/vendor/github.com/k0kubun/pp",
 			"path": "github.com/k0kubun/pp",
 			"revision": "f5dce6ed0ccf6c350f1679964ff6b61f3d6d2033",
 			"revisionTime": "2016-06-02T14:46:26Z"
+		},
+		{
+			"checksumSHA1": "WMInrlLmBGHLmUWZiWjrzt9vGgA=",
+			"path": "github.com/labstack/echo",
+			"revision": "04ed761d414afb5ec688ef9c7394529062f1bedf",
+			"revisionTime": "2016-12-26T07:23:05Z"
+		},
+		{
+			"checksumSHA1": "uODQk9z4SLrzvdoNf8TyP54M9Xo=",
+			"path": "github.com/labstack/echo/middleware",
+			"revision": "04ed761d414afb5ec688ef9c7394529062f1bedf",
+			"revisionTime": "2016-12-26T07:23:05Z"
+		},
+		{
+			"checksumSHA1": "NvfQq6Y6kh9cMw+y1m00ivEd5b4=",
+			"path": "github.com/labstack/gommon/bytes",
+			"revision": "b2765095a572012ea4828c9596fefd824c2aee72",
+			"revisionTime": "2016-12-22T19:35:26Z"
+		},
+		{
+			"checksumSHA1": "R6DzcBLEP0BONPpsyr+11N7xh5w=",
+			"path": "github.com/labstack/gommon/color",
+			"revision": "b2765095a572012ea4828c9596fefd824c2aee72",
+			"revisionTime": "2016-12-22T19:35:26Z"
+		},
+		{
+			"checksumSHA1": "8kYg34fqMUS7xbSWA9lyWbVNELg=",
+			"path": "github.com/labstack/gommon/log",
+			"revision": "b2765095a572012ea4828c9596fefd824c2aee72",
+			"revisionTime": "2016-12-22T19:35:26Z"
+		},
+		{
+			"checksumSHA1": "XvsHo25Kr69E5xxTDatXzCQc6sI=",
+			"path": "github.com/labstack/gommon/random",
+			"revision": "b2765095a572012ea4828c9596fefd824c2aee72",
+			"revisionTime": "2016-12-22T19:35:26Z"
 		},
 		{
 			"checksumSHA1": "b0T0Hzd+zYk+OCDTFMps+jwa/nY=",
@@ -312,7 +364,6 @@
 		},
 		{
 			"checksumSHA1": "I4njd26dG5hxFT2nawuByM4pxzY=",
-			"origin": "github.com/juntaki/bucketwiki/vendor/github.com/mattn/go-colorable",
 			"path": "github.com/mattn/go-colorable",
 			"revision": "d228849504861217f796da67fae4f6e347643f15",
 			"revisionTime": "2016-11-03T16:00:40Z"
@@ -336,6 +387,12 @@
 			"revisionTime": "2016-12-22T01:27:47Z"
 		},
 		{
+			"checksumSHA1": "ynJSWoF6v+3zMnh9R0QmmG6iGV8=",
+			"path": "github.com/pkg/errors",
+			"revision": "248dadf4e9068a0b3e79f02ed0a610d935de5302",
+			"revisionTime": "2016-10-29T09:36:37Z"
+		},
+		{
 			"checksumSHA1": "c7jHQZk5ZEsFR9EXsWJXkszPBZA=",
 			"path": "github.com/russross/blackfriday",
 			"revision": "5f33e7b7878355cd2b7e6b8eefc48a5472c69f70",
@@ -354,8 +411,38 @@
 			"revisionTime": "2016-09-18T04:11:01Z"
 		},
 		{
+			"checksumSHA1": "9MBZGLtzg4VbsvcYLwm/6g9bB2M=",
+			"path": "github.com/tylerb/graceful",
+			"revision": "4df1190835320af7076dfcf27b3d071fd3612caf",
+			"revisionTime": "2016-11-17T16:53:25Z"
+		},
+		{
+			"checksumSHA1": "PQy6kV2rK5B3qtCRpANzgRQPnFs=",
+			"path": "github.com/valyala/fasttemplate",
+			"revision": "3b874956e03f1636d171bda64b130f9135f42cff",
+			"revisionTime": "2016-03-15T19:31:34Z"
+		},
+		{
+			"checksumSHA1": "TK1Yr8BbwionaaAvM+77lwAAx/8=",
+			"path": "golang.org/x/crypto/acme",
+			"revision": "f6b343c37ca80bfa8ea539da67a0b621f84fab1d",
+			"revisionTime": "2016-12-21T04:54:10Z"
+		},
+		{
+			"checksumSHA1": "fvFbUkZIL96D/kWOJwJRMESGjQQ=",
+			"path": "golang.org/x/crypto/acme/autocert",
+			"revision": "f6b343c37ca80bfa8ea539da67a0b621f84fab1d",
+			"revisionTime": "2016-12-21T04:54:10Z"
+		},
+		{
 			"checksumSHA1": "9jjO5GjLa0XF/nfWihF02RoH4qc=",
 			"path": "golang.org/x/net/context",
+			"revision": "45e771701b814666a7eb299e6c7a57d0b1799e91",
+			"revisionTime": "2016-12-15T19:42:18Z"
+		},
+		{
+			"checksumSHA1": "WHc3uByvGaMcnSoI21fhzYgbOgg=",
+			"path": "golang.org/x/net/context/ctxhttp",
 			"revision": "45e771701b814666a7eb299e6c7a57d0b1799e91",
 			"revisionTime": "2016-12-15T19:42:18Z"
 		},
