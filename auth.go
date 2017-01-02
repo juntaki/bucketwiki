@@ -6,13 +6,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
-	"os"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/labstack/echo"
-	"github.com/markbates/goth"
 	"github.com/markbates/goth/gothic"
-	"github.com/markbates/goth/providers/twitter"
+	"github.com/pkg/errors"
 )
 
 func randomString() (string, error) {
@@ -26,21 +24,48 @@ func randomString() (string, error) {
 	return hex.EncodeToString(bytes), nil
 }
 
-func authMiddleware() echo.MiddlewareFunc {
-	goth.UseProviders(
-		twitter.New(
-			os.Getenv("TWITTER_KEY"),
-			os.Getenv("TWITTER_SECRET"),
-			os.Getenv("URL")+"/auth/callback?provider=twitter",
-		),
-	)
+func (h *handler) getSession(c echo.Context) (sess *sessionData, err error) {
+	sessionID, err := c.Cookie("sessionID")
+	if err != nil {
+		return nil, errors.Wrap(err, "cookie not found")
+	}
+	log.Println("sessionID", sessionID.Value)
+	sess = &sessionData{ID: sessionID.Value}
+	err = h.db.loadBare(sess)
+	if err != nil {
+		return nil, errors.Wrap(err, "loadBare failed")
+	}
+	return sess, nil
+}
+
+func (h *handler) setSession(c echo.Context, sess *sessionData) (err error) {
+	sess.ID, err = randomString()
+	if err != nil {
+		return err
+	}
+	log.Println("save session", sess.ID)
+	err = h.db.saveBare(sess)
+	if err != nil {
+		return err
+	}
+	c.SetCookie(&http.Cookie{Name: "sessionID", Value: sess.ID, Path: "/"})
+	return nil
+}
+
+func (h *handler) authMiddleware() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) (err error) {
-			cookie, err := c.Cookie("user")
-			if err != nil || cookie.Value == "" {
-				log.Println("get failed")
+			log.Println("Auth middleware")
+			session, err := h.getSession(c)
+			if err != nil {
+				log.Println("get session failed", err)
 				return c.Redirect(http.StatusFound, "/login")
 			}
+			if session.Login == false {
+				log.Println("not login session")
+				return c.Redirect(http.StatusFound, "/login")
+			}
+			c.Set("session", session)
 			return next(c)
 		}
 	}
@@ -59,12 +84,19 @@ func (h *handler) authCallbackHandler(c echo.Context) (err error) {
 	userData.ID = user.Provider + user.UserID
 	userData.Token = user.AccessToken
 	userData.Secret = user.AccessTokenSecret
-	err = h.db.saveUserAsync(user.Name, &userData)
+	err = h.db.saveBare(&userData)
 	if err != nil {
 		return err
 	}
 
-	c.SetCookie(&http.Cookie{Name: "user", Value: userData.ID})
+	sess := &sessionData{
+		Login: true,
+	}
+	err = h.setSession(c, sess)
+	if err != nil {
+		return err
+	}
+
 	return c.Redirect(http.StatusFound, "/")
 }
 
@@ -78,44 +110,46 @@ func (h *handler) authHandler(c echo.Context) (err error) {
 }
 
 func (h *handler) loginHandler(c echo.Context) (err error) {
-	// Forget last cookie first
-	c.SetCookie(&http.Cookie{Name: "user"})
-	c.SetCookie(&http.Cookie{Name: "breadcrumb"})
-
 	username := c.FormValue("username")
 	if username == "" {
 		log.Println("Failed to get username")
 		return c.Redirect(http.StatusFound, "/login")
 	}
 	log.Println("username: ", username)
-
-	userData, err := h.db.loadUserAsync(username)
+	userData := &userData{
+		Name: username,
+	}
+	err = h.db.loadBare(userData)
 	if err != nil {
-		log.Println("User is not found")
+		log.Println("User is not found", err)
 		return c.Redirect(http.StatusFound, "/login")
 	}
-	log.Println("s3Data:   ", userData.Name)
+	log.Println("userData.Name:", userData.Name)
 
 	response := c.FormValue("password")
 	log.Println("response: ", response)
 
-	cookie, err := c.Cookie("challange")
+	sess, err := h.getSession(c)
 	if err != nil {
 		return err
 	}
 
-	challange := cookie.Value
+	challange := sess.Challange
 	// Answer is SHA256(SHA256(password string) + challange string)
 	// SHA256(password) should be SHA256(password + salt), but it's too much.
 	// Wiki admin or sniffer cannot see raw password string on network and S3.
-	// Cookie itself may not safe, if network is http. (Is is encrypted?, but sniffer can see cookie.)
-	// Use https proxy, if you want to prevent spoofing.
 	answer := fmt.Sprintf("%x", sha256.Sum256([]byte(string(userData.Secret)+challange)))
 
 	log.Println("answer:   ", answer)
 
 	if answer == response {
-		c.SetCookie(&http.Cookie{Name: "user", Value: username})
+		log.Println("good answer")
+		sess.Login = true
+		sess.User = username
+		err := h.setSession(c, sess)
+		if err != nil {
+			return err
+		}
 		return c.Redirect(http.StatusFound, "/")
 	}
 	log.Println("bad answer")
@@ -127,7 +161,16 @@ func (h *handler) loginPageHandler(c echo.Context) (err error) {
 	if err != nil {
 		return nil
 	}
-	c.SetCookie(&http.Cookie{Name: "challange", Value: challange})
+
+	sess := &sessionData{
+		Login:     false,
+		Challange: challange,
+	}
+	err = h.setSession(c, sess)
+	if err != nil {
+		return err
+	}
+
 	log.Println("challange:", challange)
 	return c.Render(http.StatusOK, "auth.html", map[string]interface{}{
 		"Challenge": challange,
@@ -135,8 +178,11 @@ func (h *handler) loginPageHandler(c echo.Context) (err error) {
 }
 
 func (h *handler) logoutHandler(c echo.Context) (err error) {
-	c.SetCookie(&http.Cookie{Name: "user"})
-	c.SetCookie(&http.Cookie{Name: "breadcrumb"})
+	sess := c.Get("session").(*sessionData)
+	err = h.db.deleteBare(&sessionData{ID: sess.ID})
+	if err != nil {
+		return err
+	}
 	return c.Redirect(http.StatusFound, "/login")
 }
 
@@ -152,7 +198,7 @@ func (h *handler) signupHandler(c echo.Context) (err error) {
 		return c.Redirect(http.StatusFound, "/signup")
 	}
 
-	_, err = h.db.loadUserAsync(user.Name)
+	err = h.db.loadBare(&user)
 	if err == nil {
 		log.Println("User already exist: ", user.Name)
 		return c.Redirect(http.StatusFound, "/signup")
@@ -162,7 +208,7 @@ func (h *handler) signupHandler(c echo.Context) (err error) {
 
 	user.Secret = c.FormValue("password")
 
-	err = h.db.saveUserAsync(user.Name, &user)
+	err = h.db.saveBare(&user)
 	if err != nil {
 		log.Println("saveUser failed", err)
 		return c.Redirect(http.StatusFound, "/500")

@@ -22,10 +22,7 @@ func init() {
 		region:     "testregion",
 		wikiSecret: "testSecret",
 	}
-	wikidata.initializeMarkdownCache()
-	wikidata.initializeUserCache()
-	wikidata.initializeFileCache()
-
+	wikidata.initializeCache()
 	h = handler{db: wikidata}
 
 	e = echo.New()
@@ -42,14 +39,19 @@ func TestLogin(t *testing.T) {
 	}
 	req.Form = url.Values{
 		"username": []string{"user"},
-		"password": []string{"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"},
+		"password": []string{"74b9ae037d3d2c12acedff18b2b7bd22b8de586f32a9860ad6fa9276f1a942f7"},
 	}
 
-	cookie := &http.Cookie{Name: "challange", Value: "test"}
+	cookie := &http.Cookie{Name: "sessionID", Value: "id"}
 	req.Header["Cookie"] = []string{cookie.String()}
 
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
+	_, err = c.Cookie("sessionID")
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	err = h.loginHandler(c)
 	if err != nil {
 		t.Fatal(err)
@@ -65,6 +67,11 @@ func CheckStatus(status int, path string, handler echo.HandlerFunc) error {
 	req, err := http.NewRequest("", path, nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
+
+	sess := &sessionData{
+		Login: true,
+	}
+	c.Set("session", sess)
 	err = handler(c)
 	if err != nil {
 		if he, ok := err.(*echo.HTTPError); ok {

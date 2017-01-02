@@ -3,6 +3,7 @@ package main
 import (
 	"io/ioutil"
 	"net/http"
+	"time"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/labstack/echo"
@@ -12,9 +13,13 @@ func (h *handler) editorHandler(c echo.Context) (err error) {
 	titleHash := c.Param("titleHash")
 	title := c.QueryParam("title")
 	body := "# " + title + "\n"
-	markdown, err := h.db.loadMarkdownAsync(titleHash)
+
+	md := &pageData{
+		titleHash: titleHash,
+	}
+	err = h.db.loadBare(md)
 	if err == nil {
-		body = markdown.body
+		body = md.body
 	}
 	return c.Render(http.StatusOK, "edit.html", map[string]interface{}{
 		"Title":     title,
@@ -32,22 +37,20 @@ func (h *handler) uploadHandler(c echo.Context) (err error) {
 	filename := header.Filename
 	contentType := header.Header["Content-Type"][0]
 
-	key := fileDataKey{
-		filename:  filename,
-		titleHash: titleHash,
-	}
 	file, err := header.Open()
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err)
 	}
 
 	body, _ := ioutil.ReadAll(file)
+
 	fileData := &fileData{
-		fileDataKey: key,
+		filename:    filename,
+		titleHash:   titleHash,
 		contentType: contentType,
 		filebyte:    body,
 	}
-	err = h.db.saveFileAsync(key, fileData)
+	err = h.db.saveBare(fileData)
 	return echo.NewHTTPError(http.StatusInternalServerError, err)
 }
 
@@ -65,11 +68,14 @@ func (h *handler) postPageHandler(c echo.Context) (err error) {
 
 func (h *handler) deletePageHandler(c echo.Context) (err error) {
 	titleHash := c.Param("titleHash")
-	err = h.db.deleteMarkdownAsync(titleHash)
+	md := &pageData{titleHash: titleHash}
+	html := &htmlData{titleHash: titleHash}
+
+	err = h.db.deleteBare(md)
 	if err != nil {
 		return err
 	}
-	err = h.db.deleteHTML(titleHash)
+	err = h.db.deleteBare(html)
 	if err != nil {
 		return err
 	}
@@ -87,11 +93,8 @@ func (h *handler) putPageHandler(c echo.Context) (err error) {
 		return c.Redirect(http.StatusFound, "/500")
 	}
 
-	cookie, err := c.Cookie("user")
-	if err != nil {
-		return err
-	}
-	user := cookie.Value
+	sess := c.Get("session").(*sessionData)
+	user := sess.User
 
 	var markdown pageData
 
@@ -99,7 +102,9 @@ func (h *handler) putPageHandler(c echo.Context) (err error) {
 	markdown.title = title
 	markdown.author = user
 	markdown.body = c.FormValue("body")
-	err = h.db.saveMarkdownAsync(titleHash, &markdown)
+	markdown.lastUpdate = time.Now()
+
+	err = h.db.saveBare(&markdown)
 	if err != nil {
 		return err
 	}
@@ -110,7 +115,7 @@ func (h *handler) putPageHandler(c echo.Context) (err error) {
 			html := markdown
 			html.body = string(renderHTML(h.db, &markdown))
 
-			err = s3.saveHTML(&html)
+			err = s3.saveBare(&html)
 			log.Println("HTML uploaded")
 		}(h.db, markdown)
 	}

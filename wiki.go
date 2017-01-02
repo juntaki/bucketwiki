@@ -12,6 +12,8 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
+	"github.com/markbates/goth"
+	"github.com/markbates/goth/providers/twitter"
 
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/russross/blackfriday"
@@ -58,6 +60,14 @@ func main() {
 
 	h := handler{db: s3}
 
+	goth.UseProviders(
+		twitter.New(
+			os.Getenv("TWITTER_KEY"),
+			os.Getenv("TWITTER_SECRET"),
+			os.Getenv("URL")+"/auth/callback?provider=twitter",
+		),
+	)
+
 	e.Use(middleware.Logger())
 	e.GET("/err", func(c echo.Context) (err error) {
 		return errors.New("some error")
@@ -66,7 +76,6 @@ func main() {
 	e.POST("/login", h.loginHandler)
 	e.GET("/signup", h.signupPageHandler)
 	e.POST("/signup", h.signupHandler)
-	e.GET("/logout", h.logoutHandler)
 
 	e.GET("/auth/callback", h.authCallbackHandler)
 	e.GET("/auth", h.authHandler)
@@ -76,11 +85,12 @@ func main() {
 	e.File("/favicon.ico", "style/favicon.ico")
 
 	auth := e.Group("")
-	auth.Use(authMiddleware())
+	auth.Use(h.authMiddleware())
 	auth.GET("/", func(c echo.Context) (err error) {
 		// For first access, title query should be passed.
 		return c.Redirect(http.StatusFound, "/page/"+s3.titleHash("Home")+"?title=Home")
 	})
+	auth.GET("/logout", h.logoutHandler)
 	auth.POST("/page/:titleHash/upload", h.uploadHandler)
 	auth.GET("/page/:titleHash/edit", h.editorHandler)
 	auth.GET("/page/:titleHash/history", h.historyPageHandler)
@@ -123,10 +133,12 @@ func (h *handler) fileHandler(c echo.Context) (err error) {
 	titleHash := c.Param("titleHash")
 	filename := c.Param("filename")
 
-	fileData, err := h.db.loadFileAsync(fileDataKey{
+	fileData := &fileData{
 		filename:  filename,
 		titleHash: titleHash,
-	})
+	}
+
+	err = h.db.loadBare(fileData)
 	if err != nil {
 		log.Println(err)
 		return nil
@@ -148,17 +160,17 @@ func (h *handler) historyPageHandler(c echo.Context) (err error) {
 
 func (h *handler) pageHandler(c echo.Context) (err error) {
 	titleHash := c.Param("titleHash")
-	version := c.QueryParam("history")
-	log.Println(version)
-	var md *pageData
-	if version == "" {
-		md, err = h.db.loadMarkdownAsync(titleHash)
-	} else {
-		md, err = h.db.loadMarkdown(titleHash, version)
+	versionId := c.QueryParam("history")
+
+	md := &pageData{
+		titleHash: titleHash,
+		versionId: versionId,
 	}
+
+	err = h.db.loadBare(md)
 	if err != nil {
 		// If no object found, title cannot get from metadata, so it must be passed via query.
-		if version == "" {
+		if versionId == "" {
 			title := c.QueryParam("title")
 			return c.Redirect(http.StatusFound, "/page/"+titleHash+"/edit?title="+title)
 		}
@@ -171,20 +183,14 @@ func (h *handler) pageHandler(c echo.Context) (err error) {
 	public := h.db.checkPublic(titleHash)
 	publicURL := h.db.publicURL(titleHash)
 
-	cookie, err := c.Cookie("breadcrumb")
-	var jsonStr string
-	if err != nil {
-		jsonStr = ""
-	} else {
-		jsonStr = cookie.Value
-	}
+	sess := c.Get("session").(*sessionData)
+	jsonStr := sess.BreadCrumb
+
 	var u breadcrumb
 	u.List = []([]string){}
-	if jsonStr != "" {
-		err = json.Unmarshal([]byte(jsonStr), &u)
-		if err != nil {
-			u.List = []([]string){}
-		}
+	err = json.Unmarshal(jsonStr, &u)
+	if err != nil {
+		u.List = []([]string){}
 	}
 
 	var array []([]string)
@@ -207,8 +213,12 @@ func (h *handler) pageHandler(c echo.Context) (err error) {
 	if len(u.List) > maxSize {
 		u.List = u.List[1 : maxSize+1]
 	}
-	jsonOut, _ := json.Marshal(&u)
-	c.SetCookie(&http.Cookie{Name: "breadcrumb", Value: string(jsonOut)})
+	sess.BreadCrumb, _ = json.Marshal(&u)
+
+	err = h.setSession(c, sess)
+	if err != nil {
+		return err
+	}
 
 	return c.Render(http.StatusOK, "view.html", map[string]interface{}{
 		"Title":        title,

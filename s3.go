@@ -1,15 +1,12 @@
 package main
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
+	"reflect"
 	"strings"
-	"time"
 
 	log "github.com/Sirupsen/logrus"
 
@@ -18,6 +15,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/juntaki/transparent"
+	"github.com/juntaki/transparent/lru"
+	ts3 "github.com/juntaki/transparent/s3"
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/russross/blackfriday"
 )
@@ -28,26 +27,8 @@ type Wikidata struct {
 	bucket     string
 	region     string
 	wikiSecret string
-	pageCache  *transparent.Stack
-	userCache  *transparent.Stack
-	fileCache  *transparent.Stack
-}
-
-type pageData struct {
-	titleHash  string
-	title      string
-	author     string
-	body       string
-	lastUpdate time.Time // only for GET
-	id         string    // internal use
-}
-
-type userData struct {
-	Name             string `json:"name"`
-	ID               string `json:"id"`
-	AuthenticateType string `json:"authtype"`
-	Token            string `json:"token"`
-	Secret           string `json:"secret"`
+	cacheStack map[reflect.Type]*transparent.Stack
+	bareStack  *transparent.Stack
 }
 
 func (w *Wikidata) titleHash(titleHash string) string {
@@ -79,23 +60,6 @@ func (w *Wikidata) loadDocumentID(titleHash string) (string, error) {
 	return *r["ID"], nil
 }
 
-func (w *Wikidata) deleteUser(name string) error {
-	return w.delete("user/" + name)
-}
-
-func (w *Wikidata) deleteFile(key fileDataKey) error {
-	return w.delete("page/" + key.titleHash + "/file/" + key.filename)
-}
-
-func (w *Wikidata) deleteHTML(titleHash string) error {
-	return w.delete("page/" + titleHash + "/index.html")
-}
-
-func (w *Wikidata) deleteMarkdown(titleHash string) error {
-	log.Println("Delete markdown")
-	return w.delete("page/" + titleHash + "/index.md")
-}
-
 func (w *Wikidata) checkPublic(titleHash string) bool {
 	_, err := w.getacl("page/" + titleHash + "/index.html")
 	if err != nil {
@@ -109,23 +73,26 @@ func (w *Wikidata) setACL(titleHash string, public bool) error {
 	// private: Delete HTML and set file permission as private
 	var err error
 	if public {
-		markdown, err := w.loadMarkdown(titleHash, "")
+		markdown := &pageData{titleHash: titleHash}
+		err = w.loadBare(markdown)
 		if err != nil {
 			return err
 		}
-		html := markdown
+		html := &htmlData{titleHash: titleHash}
 
 		unsafe := blackfriday.MarkdownCommon([]byte(markdown.body))
 		html.body = string(bluemonday.UGCPolicy().SanitizeBytes(unsafe))
 
-		w.saveHTML(html)
+		w.saveBare(html)
 		log.Println("HTML uploaded")
 	} else {
-		w.delete("page/" + titleHash + "/index.html")
+		html := &htmlData{titleHash: titleHash}
+		w.deleteBare(html)
 	}
 	if err != nil {
 		return err
 	}
+
 	params := &s3.ListObjectsV2Input{
 		Bucket:    aws.String(w.bucket),
 		MaxKeys:   aws.Int64(30),
@@ -149,175 +116,6 @@ func (w *Wikidata) setACL(titleHash string, public bool) error {
 	return nil
 }
 
-// PUT request
-// saveHTML upload compiled HTML docment for publicURL
-func (w *Wikidata) saveHTML(page *pageData) error {
-	params := &s3.PutObjectInput{
-		Bucket:      aws.String(w.bucket),
-		Key:         aws.String("page/" + page.titleHash + "/index.html"),
-		Body:        strings.NewReader(page.body),
-		ContentType: aws.String("text/html; charset=utf-8"),
-		ACL:         aws.String(s3.ObjectCannedACLPublicRead),
-	}
-	_, err := w.svc.PutObject(params)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-type fileDataKey struct {
-	filename  string
-	titleHash string
-}
-type fileData struct {
-	fileDataKey
-	filebyte    []byte
-	contentType string
-}
-
-// saveFile upload attached files to file directory
-func (w *Wikidata) saveFile(file *fileData) error {
-	params := &s3.PutObjectInput{
-		Bucket:      aws.String(w.bucket),
-		Key:         aws.String("page/" + file.titleHash + "/file/" + file.filename),
-		Body:        bytes.NewReader(file.filebyte),
-		ContentType: aws.String(file.contentType),
-	}
-
-	// Set the same ACL as HTML file
-	if w.checkPublic(file.titleHash) {
-		params.SetACL(s3.ObjectCannedACLPublicRead)
-	} else {
-		params.SetACL(s3.ObjectCannedACLPrivate)
-	}
-	_, err := w.svc.PutObject(params)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (w *Wikidata) loadFile(key fileDataKey) (*fileData, error) {
-	log.Println("key:", "page/"+key.titleHash+"/file/"+key.filename)
-	paramsGet := &s3.GetObjectInput{
-		Bucket: aws.String(w.bucket),
-		Key:    aws.String("page/" + key.titleHash + "/file/" + key.filename),
-	}
-	respGet, err := w.svc.GetObject(paramsGet)
-	if err != nil {
-		return nil, err
-	}
-
-	body, _ := ioutil.ReadAll(respGet.Body)
-	return &fileData{
-		fileDataKey: key,
-		filebyte:    body,
-		contentType: *respGet.ContentType,
-	}, nil
-}
-
-func (w *Wikidata) saveMarkdown(page *pageData) error {
-	params := &s3.PutObjectInput{
-		Bucket:      aws.String(w.bucket),
-		Key:         aws.String("page/" + page.titleHash + "/index.md"),
-		Body:        strings.NewReader(page.body),
-		ContentType: aws.String("text/x-markdown"),
-		Metadata: map[string]*string{
-			"ID":     aws.String(page.id),
-			"Author": aws.String(page.author),
-			"Title":  aws.String(base64.StdEncoding.EncodeToString([]byte(page.title))),
-		},
-	}
-	// TODO: Calculate Etag value and dont upload it.
-	_, err := w.svc.PutObject(params)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (w *Wikidata) saveUser(user *userData) error {
-	body, err := json.Marshal(user)
-	if err != nil {
-		return err
-	}
-
-	params := &s3.PutObjectInput{
-		Bucket:      aws.String(w.bucket),
-		Key:         aws.String("user/" + user.Name),
-		Body:        bytes.NewReader(body),
-		ContentType: aws.String("text/plain"),
-	}
-	_, err = w.svc.PutObject(params)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// GET
-func (w *Wikidata) loadUser(name string) (*userData, error) {
-	log.Println("key:", "user/"+name)
-	paramsGet := &s3.GetObjectInput{
-		Bucket: aws.String(w.bucket),
-		Key:    aws.String("user/" + name),
-	}
-	respGet, err := w.svc.GetObject(paramsGet)
-	if err != nil {
-		return nil, err
-	}
-
-	body, _ := ioutil.ReadAll(respGet.Body)
-
-	var user userData
-	json.Unmarshal(body, &user)
-
-	return &user, nil
-}
-
-func (w *Wikidata) loadMarkdown(titleHash string, versionID string) (*pageData, error) {
-	log.Println("key:", "page/"+titleHash+"/index.md")
-	paramsGet := &s3.GetObjectInput{
-		Bucket: aws.String(w.bucket),
-		Key:    aws.String("page/" + titleHash + "/index.md"),
-	}
-	if versionID != "" {
-		paramsGet.VersionId = aws.String(versionID)
-	}
-
-	respGet, err := w.svc.GetObject(paramsGet)
-	if err != nil {
-		return nil, err
-	}
-
-	body, _ := ioutil.ReadAll(respGet.Body)
-
-	page := pageData{
-		titleHash:  titleHash,
-		lastUpdate: *respGet.LastModified,
-		body:       string(body),
-	}
-	if respGet.Metadata["Title"] != nil {
-		title, err := base64.StdEncoding.DecodeString(*respGet.Metadata["Title"])
-		if err != nil {
-			return nil, err
-		}
-		page.title = string(title)
-	}
-	if respGet.Metadata["ID"] != nil {
-		page.id = *respGet.Metadata["ID"]
-	}
-	if respGet.Metadata["Author"] != nil {
-		page.author = *respGet.Metadata["Author"]
-	}
-	return &page, nil
-}
-
 func (w *Wikidata) loadMarkdownMetadata(titleHash string) (*pageData, error) {
 	log.Println("key:", "page/"+titleHash+"/index.md")
 	paramsGet := &s3.HeadObjectInput{
@@ -339,9 +137,6 @@ func (w *Wikidata) loadMarkdownMetadata(titleHash string) (*pageData, error) {
 			return nil, err
 		}
 		page.title = string(title)
-	}
-	if respGet.Metadata["Id"] != nil {
-		page.id = *respGet.Metadata["Id"]
 	}
 	if respGet.Metadata["Author"] != nil {
 		page.author = *respGet.Metadata["Author"]
@@ -435,8 +230,40 @@ func (w *Wikidata) connect() error {
 
 	w.wikiSecret = os.Getenv("WIKI_SECRET")
 
-	w.initializeMarkdownCache()
-	w.initializeUserCache()
-	w.initializeFileCache()
+	err = w.initializeCache()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (w *Wikidata) initializeCache() error {
+	bare, err := ts3.NewBareSource(w.svc)
+	if err != nil {
+		return err
+	}
+
+	w.bareStack = transparent.NewStack()
+	w.bareStack.Stack(bare)
+	w.bareStack.Start()
+
+	w.cacheStack = make(map[reflect.Type]*transparent.Stack)
+	w.newCacheStack(bare, reflect.TypeOf(pageData{}))
+	w.newCacheStack(bare, reflect.TypeOf(htmlData{}))
+	w.newCacheStack(bare, reflect.TypeOf(userData{}))
+	w.newCacheStack(bare, reflect.TypeOf(fileData{}))
+	w.newCacheStack(bare, reflect.TypeOf(sessionData{}))
+	return nil
+}
+
+func (w *Wikidata) newCacheStack(bare transparent.Layer, t reflect.Type) error {
+	lruL, err := lru.NewCache(10, 10)
+	if err != nil {
+		return err
+	}
+	w.cacheStack[t] = transparent.NewStack()
+	w.cacheStack[t].Stack(bare)
+	w.cacheStack[t].Stack(lruL)
+	w.cacheStack[t].Start()
 	return nil
 }
