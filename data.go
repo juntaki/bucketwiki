@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"time"
 
@@ -89,13 +90,12 @@ func (page *pageData) getBare() (key s3.BareKey, value *s3.Bare, err error) {
 }
 
 func (page *pageData) setBare(b *s3.Bare) error {
-	page.lastUpdate = *b.Value["LastModified"].(*time.Time)
-
-	body, err := readAndSeek(b.Value["Body"])
-	if err != nil {
-		return err
+	body, ok := b.Value["Body"].([]byte)
+	if !ok {
+		return errors.New("invalid body type")
 	}
 	page.body = string(body)
+	page.lastUpdate = *b.Value["LastModified"].(*time.Time)
 
 	meta := b.Value["Metadata"].(map[string]*string)
 	decode, err := base64.StdEncoding.DecodeString(*meta["Title"])
@@ -103,7 +103,6 @@ func (page *pageData) setBare(b *s3.Bare) error {
 		return err
 	}
 	page.title = string(decode)
-	//page.id = *meta["ID"]
 	page.author = *meta["Author"]
 	return nil
 }
@@ -152,11 +151,11 @@ func (user *userData) getBare() (key s3.BareKey, value *s3.Bare, err error) {
 }
 
 func (user *userData) setBare(b *s3.Bare) error {
-	body, err := readAndSeek(b.Value["Body"])
-	if err != nil {
-		return err
+	body, ok := b.Value["Body"].([]byte)
+	if !ok {
+		return errors.New("invalid body type")
 	}
-	err = json.Unmarshal(body, user)
+	err := json.Unmarshal(body, user)
 	if err != nil {
 		return err
 	}
@@ -168,7 +167,6 @@ type fileData struct {
 	titleHash   string // Key
 	filebyte    []byte
 	contentType string
-	acl         string
 }
 
 func (file *fileData) getBare() (key s3.BareKey, value *s3.Bare, err error) {
@@ -179,30 +177,26 @@ func (file *fileData) getBare() (key s3.BareKey, value *s3.Bare, err error) {
 	bv := s3.NewBare()
 	bv.Value["Body"] = file.filebyte
 	bv.Value["ContentType"] = aws.String(file.contentType)
-	bv.Value["ACL"] = file.acl
 	return bk, bv, nil
 }
 
 func (file *fileData) setBare(b *s3.Bare) error {
-	body, err := readAndSeek(b.Value["Body"])
-	if err != nil {
-		return err
+	body, ok := b.Value["Body"].([]byte)
+	if !ok {
+		return errors.New("invalid body type")
 	}
 
 	file.filebyte = body
 	file.contentType = *b.Value["ContentType"].(*string)
-	if b.Value["ACL"] != nil {
-		file.acl = *b.Value["ACL"].(*string)
-	}
 	return nil
 }
 
 type sessionData struct {
-	ID         string `json:"id"` // Key
-	Challange  string `json:"challange"`
-	User       string `json:"user"`
-	BreadCrumb []byte `json:"breadcrumb"`
-	Login      bool   `json:"login"`
+	ID         string       `json:"id"` // Key
+	Challange  string       `json:"challange"`
+	User       string       `json:"user"`
+	BreadCrumb []([]string) `json:"breadcrumb"`
+	Login      bool         `json:"login"`
 }
 
 func (session *sessionData) getBare() (key s3.BareKey, value *s3.Bare, err error) {
@@ -222,29 +216,15 @@ func (session *sessionData) getBare() (key s3.BareKey, value *s3.Bare, err error
 }
 
 func (session *sessionData) setBare(b *s3.Bare) error {
-	body, err := readAndSeek(b.Value["Body"])
-	if err != nil {
-		return err
+	body, ok := b.Value["Body"].([]byte)
+	if !ok {
+		return errors.New("invalid body type")
 	}
 
-	err = json.Unmarshal(body, session)
+	err := json.Unmarshal(body, session)
 	if err != nil {
 		pp.Print(body)
 		return err
 	}
 	return nil
-}
-
-func readAndSeek(value interface{}) ([]byte, error) {
-	// reader, ok := value.(io.Reader)
-	// if !ok {
-	// 	return []byte{}, fmt.Errorf("type is %s, not io.Reader", reflect.TypeOf(value))
-	// }
-	// body, err := ioutil.ReadAll(reader)
-	// if err != nil {
-	// 	return []byte{}, err
-	// }
-	// //	value = body
-
-	return value.([]byte), nil
 }

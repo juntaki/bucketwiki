@@ -2,7 +2,6 @@ package main
 
 import (
 	"crypto/sha256"
-	"encoding/base64"
 	"fmt"
 	"os"
 	"reflect"
@@ -31,33 +30,12 @@ type Wikidata struct {
 	bareStack  *transparent.Stack
 }
 
-func (w *Wikidata) titleHash(titleHash string) string {
-	return fmt.Sprintf("%x", sha256.Sum256([]byte(titleHash+w.wikiSecret)))
+func (w *Wikidata) titleHash(title string) string {
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(title+w.wikiSecret)))
 }
 
 func (w *Wikidata) publicURL(titleHash string) string {
 	return "http://" + w.bucket + ".s3-website-" + w.region + ".amazonaws.com/page/" + titleHash
-}
-
-func (w *Wikidata) delete(key string) error {
-	params := &s3.DeleteObjectInput{
-		Bucket: aws.String(w.bucket),
-		Key:    aws.String(key),
-	}
-	_, err := w.svc.DeleteObject(params)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (w *Wikidata) loadDocumentID(titleHash string) (string, error) {
-	r, err := w.head(titleHash)
-	if err != nil {
-		return "", err
-	}
-	return *r["ID"], nil
 }
 
 func (w *Wikidata) checkPublic(titleHash string) bool {
@@ -114,34 +92,6 @@ func (w *Wikidata) setACL(titleHash string, public bool) error {
 		}
 	}
 	return nil
-}
-
-func (w *Wikidata) loadMarkdownMetadata(titleHash string) (*pageData, error) {
-	log.Println("key:", "page/"+titleHash+"/index.md")
-	paramsGet := &s3.HeadObjectInput{
-		Bucket: aws.String(w.bucket),
-		Key:    aws.String("page/" + titleHash + "/index.md"),
-	}
-	respGet, err := w.svc.HeadObject(paramsGet)
-	if err != nil {
-		return nil, err
-	}
-
-	page := pageData{
-		titleHash:  titleHash,
-		lastUpdate: *respGet.LastModified,
-	}
-	if respGet.Metadata["Title"] != nil {
-		title, err := base64.StdEncoding.DecodeString(*respGet.Metadata["Title"])
-		if err != nil {
-			return nil, err
-		}
-		page.title = string(title)
-	}
-	if respGet.Metadata["Author"] != nil {
-		page.author = *respGet.Metadata["Author"]
-	}
-	return &page, nil
 }
 
 func (w *Wikidata) head(key string) (map[string]*string, error) {

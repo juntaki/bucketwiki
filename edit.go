@@ -94,30 +94,28 @@ func (h *handler) putPageHandler(c echo.Context) (err error) {
 	}
 
 	sess := c.Get("session").(*sessionData)
-	user := sess.User
 
-	var markdown pageData
+	markdown := &pageData{
+		titleHash:  titleHash,
+		title:      title,
+		author:     sess.User,
+		body:       c.FormValue("body"),
+		lastUpdate: time.Now(),
+	}
 
-	markdown.titleHash = titleHash
-	markdown.title = title
-	markdown.author = user
-	markdown.body = c.FormValue("body")
-	markdown.lastUpdate = time.Now()
-
-	err = h.db.saveBare(&markdown)
+	err = h.db.saveBare(markdown)
 	if err != nil {
 		return err
 	}
 
 	// Async upload compiled HTML
 	if h.db.checkPublic(markdown.titleHash) {
-		go func(s3 *Wikidata, markdown pageData) {
+		go func(s3 *Wikidata, markdown *pageData) {
 			html := &htmlData{
 				titleHash: markdown.titleHash,
-				body:      string(renderHTML(h.db, &markdown)),
+				body:      string(renderHTML(h.db, markdown)),
 			}
-
-			err = s3.saveBare(html)
+			s3.saveBare(html)
 			log.Println("HTML uploaded")
 		}(h.db, markdown)
 	}

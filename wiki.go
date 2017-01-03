@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"html/template"
 	"io"
@@ -126,10 +125,6 @@ func (h *handler) aclHandler(c echo.Context) (err error) {
 	return c.Redirect(http.StatusFound, "/page/"+titleHash)
 }
 
-type breadcrumb struct {
-	List []([]string) `json:"list"`
-}
-
 func (h *handler) fileHandler(c echo.Context) (err error) {
 	titleHash := c.Param("titleHash")
 	filename := c.Param("filename")
@@ -185,36 +180,23 @@ func (h *handler) pageHandler(c echo.Context) (err error) {
 	publicURL := h.db.publicURL(titleHash)
 
 	sess := c.Get("session").(*sessionData)
-	jsonStr := sess.BreadCrumb
 
-	var u breadcrumb
-	u.List = []([]string){}
-	err = json.Unmarshal(jsonStr, &u)
-	if err != nil {
-		u.List = []([]string){}
-	}
+	var tmpList []([]string)
 
-	var array []([]string)
-
-	for _, l := range u.List {
-		if len(l) != 2 {
-			// cookie is malformed, may be old version.
-			break
-		}
+	for _, l := range sess.BreadCrumb {
 		if l[0] != title {
-			array = append(array, l)
+			tmpList = append(tmpList, l)
 		}
 	}
+	tmpList = append(tmpList, []string{title, titleHash})
 
 	maxSize := 5
-
-	u.List = append(array, []string{title, titleHash})
-
 	// Cut down the size
-	if len(u.List) > maxSize {
-		u.List = u.List[1 : maxSize+1]
+	if len(tmpList) > maxSize {
+		tmpList = tmpList[1 : maxSize+1]
 	}
-	sess.BreadCrumb, _ = json.Marshal(&u)
+
+	sess.BreadCrumb = tmpList
 
 	err = h.setSession(c, sess)
 	if err != nil {
@@ -225,7 +207,7 @@ func (h *handler) pageHandler(c echo.Context) (err error) {
 		"Title":        title,
 		"TitleHash":    titleHash,
 		"Body":         template.HTML(html),
-		"Breadcrumb":   array,
+		"Breadcrumb":   sess.BreadCrumb,
 		"Public":       public,
 		"PublicURL":    publicURL,
 		"LastModified": md.lastUpdate,
