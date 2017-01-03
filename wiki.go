@@ -69,6 +69,7 @@ func main() {
 	)
 
 	e.Use(middleware.Logger())
+	e.Use(middleware.Recover())
 	e.GET("/err", func(c echo.Context) (err error) {
 		return errors.New("some error")
 	})

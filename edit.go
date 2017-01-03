@@ -112,10 +112,12 @@ func (h *handler) putPageHandler(c echo.Context) (err error) {
 	// Async upload compiled HTML
 	if h.db.checkPublic(markdown.titleHash) {
 		go func(s3 *Wikidata, markdown pageData) {
-			html := markdown
-			html.body = string(renderHTML(h.db, &markdown))
+			html := &htmlData{
+				titleHash: markdown.titleHash,
+				body:      string(renderHTML(h.db, &markdown)),
+			}
 
-			err = s3.saveBare(&html)
+			err = s3.saveBare(html)
 			log.Println("HTML uploaded")
 		}(h.db, markdown)
 	}

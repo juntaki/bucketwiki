@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"reflect"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -79,6 +78,7 @@ func (page *pageData) getBare() (key s3.BareKey, value *s3.Bare, err error) {
 	}
 
 	bv := s3.NewBare()
+	bv.Value["LastModified"] = &page.lastUpdate
 	bv.Value["Body"] = []byte(page.body)
 	bv.Value["ContentType"] = aws.String("text/x-markdown")
 	bv.Value["Metadata"] = map[string]*string{
@@ -119,7 +119,7 @@ func (h *htmlData) getBare() (key s3.BareKey, value *s3.Bare, err error) {
 	}
 
 	bv := s3.NewBare()
-	bv.Value["Body"] = strings.NewReader(h.body)
+	bv.Value["Body"] = []byte(h.body)
 	bv.Value["ContentType"] = aws.String("text/html")
 	return bk, bv, nil
 }
@@ -191,7 +191,9 @@ func (file *fileData) setBare(b *s3.Bare) error {
 
 	file.filebyte = body
 	file.contentType = *b.Value["ContentType"].(*string)
-	//file.acl = *b.Value["ACL"].(*string)
+	if b.Value["ACL"] != nil {
+		file.acl = *b.Value["ACL"].(*string)
+	}
 	return nil
 }
 
