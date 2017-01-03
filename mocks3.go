@@ -28,13 +28,11 @@ func (m *mockS3) GetObject(i *s3.GetObjectInput) (*s3.GetObjectOutput, error) {
 		case "index.md":
 			contentType = "text/x-markdown"
 			meta["Title"] = aws.String(base64.StdEncoding.EncodeToString([]byte("testTitle")))
-			meta["ID"] = aws.String("testID")
 			meta["Author"] = aws.String("testauthor")
+			meta["Public"] = aws.String("true")
 		case "index.html":
 			contentType = "text/html"
 			meta["Title"] = aws.String(base64.StdEncoding.EncodeToString([]byte("testTitle")))
-			meta["ID"] = aws.String("testID")
-			meta["Author"] = aws.String("testauthor")
 		default:
 			contentType = "image/jpeg"
 		}

@@ -7,8 +7,6 @@ import (
 	"reflect"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
-
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -16,8 +14,6 @@ import (
 	"github.com/juntaki/transparent"
 	"github.com/juntaki/transparent/lru"
 	ts3 "github.com/juntaki/transparent/s3"
-	"github.com/microcosm-cc/bluemonday"
-	"github.com/russross/blackfriday"
 )
 
 // Wikidata is storing data in S3
@@ -39,34 +35,47 @@ func (w *Wikidata) publicURL(titleHash string) string {
 }
 
 func (w *Wikidata) checkPublic(titleHash string) bool {
-	_, err := w.getacl("page/" + titleHash + "/index.html")
+	markdown := &pageData{
+		titleHash: titleHash,
+	}
+	err := w.loadBare(markdown)
+	// TODO: error should be checked
 	if err != nil {
 		return false
 	}
-	return true
+	return markdown.public
 }
 
 func (w *Wikidata) setACL(titleHash string, public bool) error {
 	// public: Upload HTML and set file permission as public
 	// private: Delete HTML and set file permission as private
 	var err error
+
+	markdown := &pageData{titleHash: titleHash}
+	err = w.loadBare(markdown)
+	if err != nil {
+		return err
+	}
+	if markdown.public == public {
+		return nil
+	}
+
 	if public {
-		markdown := &pageData{titleHash: titleHash}
-		err = w.loadBare(markdown)
+		markdown.public = true
+		err = w.uploadHTML(markdown)
 		if err != nil {
 			return err
 		}
-		html := &htmlData{titleHash: titleHash}
-
-		unsafe := blackfriday.MarkdownCommon([]byte(markdown.body))
-		html.body = string(bluemonday.UGCPolicy().SanitizeBytes(unsafe))
-
-		w.saveBare(html)
-		log.Println("HTML uploaded")
 	} else {
+		markdown.public = false
 		html := &htmlData{titleHash: titleHash}
-		w.deleteBare(html)
+		err := w.deleteBare(html)
+		if err != nil {
+			return err
+		}
 	}
+
+	err = w.saveBare(markdown)
 	if err != nil {
 		return err
 	}

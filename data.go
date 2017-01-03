@@ -70,6 +70,7 @@ type pageData struct {
 	author     string
 	body       string
 	lastUpdate time.Time
+	public     bool
 }
 
 func (page *pageData) getBare() (key s3.BareKey, value *s3.Bare, err error) {
@@ -82,10 +83,18 @@ func (page *pageData) getBare() (key s3.BareKey, value *s3.Bare, err error) {
 	bv.Value["LastModified"] = &page.lastUpdate
 	bv.Value["Body"] = []byte(page.body)
 	bv.Value["ContentType"] = aws.String("text/x-markdown")
-	bv.Value["Metadata"] = map[string]*string{
+	meta := map[string]*string{
 		"Author": aws.String(page.author),
 		"Title":  aws.String(base64.StdEncoding.EncodeToString([]byte(page.title))),
 	}
+	if page.public {
+		meta["Public"] = aws.String("true")
+	} else {
+		meta["Public"] = aws.String("false")
+	}
+
+	bv.Value["Metadata"] = meta
+
 	return bk, bv, nil
 }
 
@@ -104,12 +113,22 @@ func (page *pageData) setBare(b *s3.Bare) error {
 	}
 	page.title = string(decode)
 	page.author = *meta["Author"]
+
+	if *meta["Public"] == "true" {
+		page.public = true
+	} else {
+		page.public = false
+	}
 	return nil
 }
 
 type htmlData struct {
 	titleHash string // Key
 	body      string
+}
+
+func (h *htmlData) getKey() string {
+	return "page/" + h.titleHash + "/index.html"
 }
 
 func (h *htmlData) getBare() (key s3.BareKey, value *s3.Bare, err error) {

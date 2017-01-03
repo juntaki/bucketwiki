@@ -173,30 +173,9 @@ func (h *handler) pageHandler(c echo.Context) (err error) {
 		return c.Redirect(http.StatusFound, "/404")
 	}
 
-	html := renderHTML(h.db, md)
-	title := md.title
-
-	public := h.db.checkPublic(titleHash)
-	publicURL := h.db.publicURL(titleHash)
-
 	sess := c.Get("session").(*sessionData)
 
-	var tmpList []([]string)
-
-	for _, l := range sess.BreadCrumb {
-		if l[0] != title {
-			tmpList = append(tmpList, l)
-		}
-	}
-	tmpList = append(tmpList, []string{title, titleHash})
-
-	maxSize := 5
-	// Cut down the size
-	if len(tmpList) > maxSize {
-		tmpList = tmpList[1 : maxSize+1]
-	}
-
-	sess.BreadCrumb = tmpList
+	sess.BreadCrumb = h.db.updateBreadcrumb(sess.BreadCrumb, md.title)
 
 	err = h.setSession(c, sess)
 	if err != nil {
@@ -204,18 +183,36 @@ func (h *handler) pageHandler(c echo.Context) (err error) {
 	}
 
 	return c.Render(http.StatusOK, "view.html", map[string]interface{}{
-		"Title":        title,
+		"Title":        md.title,
 		"TitleHash":    titleHash,
-		"Body":         template.HTML(html),
+		"Body":         template.HTML(h.db.renderHTML(md)),
 		"Breadcrumb":   sess.BreadCrumb,
-		"Public":       public,
-		"PublicURL":    publicURL,
+		"Public":       md.public,
+		"PublicURL":    h.db.publicURL(titleHash),
 		"LastModified": md.lastUpdate,
 		"Author":       md.author,
 	})
 }
 
-func renderHTML(s3 *Wikidata, md *pageData) []byte {
+func (s3 *Wikidata) updateBreadcrumb(list []([]string), title string) []([]string) {
+	var tmpList []([]string)
+
+	for _, l := range list {
+		if l[0] != title {
+			tmpList = append(tmpList, l)
+		}
+	}
+	tmpList = append(tmpList, []string{title, s3.titleHash(title)})
+
+	maxSize := 5
+	// Cut down the size
+	if len(tmpList) > maxSize {
+		tmpList = tmpList[1 : maxSize+1]
+	}
+	return tmpList
+}
+
+func (s3 *Wikidata) renderHTML(md *pageData) []byte {
 	rep := regexp.MustCompile(`\[\[.*?\]\]`)
 
 	str := md.body
